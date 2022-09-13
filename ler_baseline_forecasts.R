@@ -26,7 +26,7 @@ forecast.RW  <- function(targets = targets, start, h= 14, sd = 'mean') {
   
   RW_forecast <- RW_model %>% fabletools::generate(h = h,
                                                 bootstrap = T,
-                                                times = 100)  %>%
+                                                times = 200)  %>%
     rename(model_id = .model,
            predicted = .sim) %>%
     as_tibble() %>% 
@@ -64,13 +64,18 @@ forecast.clim <- function(targets = targets, start, h=14, sd = 'mean') {
   
   # Day of year of the forecast dates
   forecast_doy <- data.frame(time = seq(start, as_date(start + days(h-1)), "1 day")) %>%
-    mutate(doy = yday(time))
-
+    mutate(doy = yday(time)) 
+  
+  # All combinations of doy and site_id
+  site_doy <- expand.grid(doy = forecast_doy$doy, site_id = unique(targets$site_id))
+  
   # produce the forecast
   clim_forecast <- 
     doy_targets %>%
+    ungroup() %>%
     mutate(doy = as.integer(doy)) %>% 
     filter(doy %in% forecast_doy$doy) %>% 
+    full_join(., site_doy, by = c('doy', 'site_id')) %>%
     full_join(., forecast_doy, by = 'doy') %>%
     select(-doy) 
   
