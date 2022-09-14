@@ -49,7 +49,7 @@ forecast.RW  <- function(start, h= 34, depth_use) {
            predicted = .sim,
            ensemble = .rep) %>%
     as_tibble() %>% 
-    mutate(h = as.numeric(time - min(time) + 1),
+    mutate(#h = as.numeric(time - min(time) + 1),
            start_time = start) 
 
   message('RW forecast for ', start, ' at ', depth_use, ' m')
@@ -59,7 +59,11 @@ forecast.RW  <- function(start, h= 34, depth_use) {
 }
 
 
-RW <- purrr::pmap_dfr(forecast_vars, forecast.RW) 
+RW <- purrr::pmap_dfr(forecast_vars, forecast.RW) %>%
+  mutate(site_id = 'fcre',
+         variable = 'temperature',
+         forecast = 0,
+         variable_type = 'state')
 
 write_csv(RW, 'RW.csv.gz')
 #=======================================#
@@ -114,16 +118,19 @@ forecast.clim <- function(targets = targets, start, h=34) {
     # If there is a gap in the forecast, linearly interpolate, should only be for leap year missingness
     mutate(predicted = imputeTS::na_interpolation(predicted),
            sd = imputeTS::na_interpolation(sd)) %>%
-    mutate(model_id = 'climatology',
-           h = as.numeric(time - start + 1)) 
+    mutate(model_id = 'climatology') 
   
   message('climatology forecast for ', start)
-  return(clim_forecast[, c('model_id', 'time', 'start_time', 'depth', 'predicted', 'sd', 'h')])
+  return(clim_forecast[, c('model_id', 'time', 'start_time', 'depth', 'predicted', 'sd')])
   
 }
 
 climatology <- forecast_dates %>%
-  map_dfr( ~ forecast.clim(targets = targets, start = .x))
+  map_dfr( ~ forecast.clim(targets = targets, start = .x)) %>%
+  mutate(site_id = 'fcre',
+         variable = 'temperature',
+         forecast = 0,
+         variable_type = 'state')
 
-write_csv(climatology, 'climatology.csv.gz')
+write_csv(climatology, 'climatology.csv.gz') 
 #================================#
