@@ -1,9 +1,9 @@
 # Script 2 in workflow to score forecast
 # The scoring starts by combining different forecasts, then scores different combinations
 
-# There will be 8 different scored forecasts
+# There will be 14 different scored forecasts
   # 5 individual models (3 process based, 2 baseline)
-  # and then 3 multi-model ensembles (LER, baselines, LER+baselines)
+  # and then 3 multi-model ensembles (LER, baselines, LER+baselines) - 3 of each based on resampling
 
 library(GLM3r)
 library(FLAREr)
@@ -20,6 +20,17 @@ ler_forecast <- read_csv('./forecasts/ler_forecast.csv.gz') %>%
   mutate(ensemble = case_when(model_id == 'ms1_ler_flare_GLM' ~ ensemble,
                               model_id == 'ms1_ler_flare_GOTM' ~ ensemble + 1000,
                               model_id == 'ms1_ler_flare_Simstrat' ~ ensemble + 2000))
+# Individual process model forecasts
+GOTM_forecast <- read_csv('./forecasts/GOTM_forecast.csv.gz') %>%
+  filter(depth == 1 &
+           variable == 'temperature')
+GLM_forecast <- read_csv('./forecasts/GLM_forecast.csv.gz') %>%
+  filter(depth == 1 &
+           variable == 'temperature')
+Simstrat_forecast <- read_csv('./forecasts/Simstrat_forecast.csv.gz') %>%
+  filter(depth == 1 &
+           variable == 'temperature')
+
 # Baseline forecasts
 RW_forecast <- read_csv('./forecasts/RW_forecast.csv.gz') %>%
   filter(depth == 1 &
