@@ -32,6 +32,14 @@ ler_forecast <- ds_ler |>
   filter(depth == 1) %>%
   dplyr::collect()
 
+# Extract individual model forecasts
+GLM_forecast <- ler_forecast %>%
+  filter(model_id == 'ms1_ler_flare_GLM')
+GOTM_forecast <- ler_forecast %>%
+  filter(model_id == 'ms1_ler_flare_GOTM')
+Simstrat_forecast <- ler_forecast %>%
+  filter(model_id == 'ms1_ler_flare_Simstrat')
+
 #### b) Baseline forecasts ####
 # Targets data needed to produce baseline forecasts
 targets <- read_csv('https://s3.flare-forecast.org/targets/ler/fcre/fcre-targets-insitu.csv') %>%
@@ -180,7 +188,7 @@ create.ensemble <- function(climatology, times = 200) {
 }
 
 # Run the function over each row (time, start_time and depth combination)
-climatology_ensemble <- climatology %>%
+climatology_forecast <- climatology %>%
   split(1:nrow(.)) %>%
   purrr::map_dfr(create.ensemble) %>%
   # add in the extra columns needed
@@ -192,17 +200,22 @@ climatology_ensemble <- climatology %>%
 #=============================#
 
 #### c) Write forecasts to file ####
-
+forecasts <- ls(pattern = '_forecast')
 # Runs differently in console and jobs
-if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
-  write_csv(RW_forecast, '../forecasts/RW_forecast.csv.gz')
-  write_csv(climatology_ensemble, '../forecasts/climatology_forecast.csv.gz')
-  write_csv(ler, '../forecasts/ler_forecast.csv.gz')
-
-} else {
-  write_csv(RW_forecast, './forecasts/RW_forecast.csv.gz')
-  write_csv(climatology_ensemble, './forecasts/climatology_forecast.csv.gz')
-  write_csv(ler_forecast, './forecasts/ler_forecast.csv.gz')
+for (i in 1:length(forecasts)) {
+  
+  if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
+    write_csv(get(forecasts[i]), paste0('../forecasts/',        
+                                        forecasts[i],
+                                        '.csv.gz'))
+    
+  } else {
+    write_csv(get(forecasts[i]), paste0('./forecasts/',
+                                        forecasts[i],
+                                        '.csv.gz'))
+  }
+  message(forecasts[i],' written')
 }
+
 
 #==========================#
