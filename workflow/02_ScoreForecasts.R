@@ -50,14 +50,14 @@ empirical_ler_forecast <- bind_rows(RW_forecast, climatology_forecast) %>%
 
 ##### Resample empirical #####
 # Equal weighting of models
-empirical_forecast_200 <- empirical_forecast %>%
+empirical_200_forecast <- empirical_forecast %>%
   group_by(model_id) %>%
   distinct(ensemble) %>%
   slice_sample(n = 200/n_groups(.)) %>%
   left_join(., empirical_forecast, by = c("model_id", "ensemble"))
 
 # get a random 200 ensemble - any model
-empirical_forecast_random200 <- empirical_forecast %>%
+empirical_random200_forecast <- empirical_forecast %>%
   distinct(ensemble) %>%
   slice_sample(n=200) %>%
   left_join(., empirical_forecast, by = "ensemble") 
@@ -65,14 +65,14 @@ empirical_forecast_random200 <- empirical_forecast %>%
 
 ##### Resample empirical-LER ######
 # Equal weighting of models
-empirical_ler_forecast_200 <- empirical_ler_forecast %>%
+empirical_ler_200_forecast <- empirical_ler_forecast %>%
   group_by(model_id) %>%
   distinct(ensemble) %>%
   slice_sample(n = 200/n_groups(.)) %>%
   left_join(., empirical_ler_forecast, by = c("model_id", "ensemble"))
 
 # get a random 200 ensemble - any model
-empirical_ler_forecast_random200 <- empirical_ler_forecast %>%
+empirical_ler_random200_forecast <- empirical_ler_forecast %>%
   distinct(ensemble) %>%
   slice_sample(n=200) %>%
   left_join(., empirical_ler_forecast, by = "ensemble") 
@@ -80,14 +80,14 @@ empirical_ler_forecast_random200 <- empirical_ler_forecast %>%
 
 ##### Resample LER #####
 # Equal weighting of models
-ler_forecast_200 <- ler_forecast %>%
+ler_200_forecast <- ler_forecast %>%
   group_by(model_id) %>%
   distinct(ensemble) %>%
   slice_sample(n = ceiling(200/n_groups(.))) %>%
   left_join(., ler_forecast, by = c("model_id", "ensemble"))
 
 # get a random 200 ensemble - any model
-ler_forecast_random200 <- ler_forecast %>%
+ler_random200_forecast <- ler_forecast %>%
   distinct(ensemble) %>%
   slice_sample(n=201) %>%
   left_join(., ler_forecast, by = "ensemble") 
