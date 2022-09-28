@@ -20,7 +20,7 @@ options(dplyr.summarise.inform = FALSE)
 # The LER foreacsts are produced within the FLARE-LER workflow
 
 # Read in the raw forecasts from s3 bucket
-s3_ler <- arrow::s3_bucket(bucket = "test-csv/ler/fcre",
+s3_ler <- arrow::s3_bucket(bucket = "test-csv/ler_ms/fcre",
                                 endpoint_override =  "s3.flare-forecast.org",
                                 anonymous = TRUE)
 
@@ -29,7 +29,7 @@ ds_ler <- arrow::open_dataset(s3_ler, format = "csv")
 # Fetch forecast from S3 bucket
 ler_forecast <- ds_ler |> 
   # At the moment just looking at 1 depth
-  filter(depth == 1) %>%
+  filter(variable == 'temperature') %>%
   dplyr::collect()
 
 # Extract individual model forecasts
@@ -46,7 +46,7 @@ targets <- read_csv('https://s3.flare-forecast.org/targets/ler/fcre/fcre-targets
   filter(variable == 'temperature')
 
 # When to produce forecasts for
-forecast_dates <- seq(ymd('2018-08-03'), ymd('2019-01-11'), 7)
+forecast_dates <- seq.Date(as.Date(min(ler_forecast$start_time)),as.Date(max(ler_forecast$start_time)), 7)
 
 # data frame with all depth and start_date combinations to be forecast
 forecast_vars <- expand.grid(start = forecast_dates, 
@@ -58,7 +58,7 @@ forecast.RW  <- function(start, h= 14, depth_use) {
   
   # Work out when the forecast should start
   forecast_starts <- targets %>%
-    dplyr::filter(!is.na(observed) & depth == depth_use, time < start)
+    dplyr::filter(!is.na(observed) & depth == depth_use & time < start)
   
   if (nrow(forecast_starts) !=0) {
     forecast_starts <- forecast_starts %>% 
@@ -77,14 +77,14 @@ forecast.RW  <- function(start, h= 14, depth_use) {
       tsibble::fill_gaps() %>%
       # Remove the NA's put at the end, so that the forecast starts from the last day with an observation,
       # rather than today
-      dplyr::filter(time < forecast_starts$start_date)  %>%
+      dplyr::filter(time < forecast_starts$start_date) %>%
       fabletools::model(RW = fable::RW(observed))
     
     # Generate the forecast
     RW_forecast <- RW_model %>%
       fabletools::generate(h = as.numeric(forecast_starts$h),
                            bootstrap = T,
-                           times = 200) %>%
+                           times = 256) %>%
       rename(model_id = .model,
              predicted = .sim,
              ensemble = .rep) %>%
@@ -115,13 +115,12 @@ RW_forecast <- purrr::pmap_dfr(forecast_vars, forecast.RW) %>%
 # some of this function will change when we are forecasting the 2020-2021 period
 forecast.clim <- function(targets = targets, start, h=14) {
   # only the targets available before should be used to produce the forecast
-  # currently uses all data after instead
   doy_targets <- targets %>%
-    filter(time > start) %>%
+    filter(time < start) %>%
     
     # this gives the day of year as if it were a leap year
-    mutate(doy = ifelse(yday(time) > 59 & lubridate::leap_year(time) == F,
-                        yday(time) + lubridate::days(1),
+    mutate(doy = ifelse((yday(time) > 59 & lubridate::leap_year(time) != T),
+                        yday(time) + 1,
                         yday(time))) %>%
     
     # find the day of year average
@@ -145,19 +144,36 @@ forecast.clim <- function(targets = targets, start, h=14) {
     full_join(., forecast_doy, by = 'doy') %>%
     select(-doy) 
   
-  # Uncertainty - Calculate the sd between observations of each month per depth and then find the 
-  # average (mean) of these, gives a different sd for each depth
-  clim_forecast <- targets %>%
-    filter(time > start) %>%
-    mutate(month = zoo::as.yearmon(time)) %>%
+  # Uncertainty - sd of the residuals between the last two years of data
+  clim_uncertainty <- data.frame(depth = unique(clim_forecast$depth),
+                                 sd = NA)
+  
+  for (i in 1:length(unique(clim_forecast$depth))) {
+    # for a specified depth
+    depth_use <- unique(clim_forecast$depth)[i]
     
-    # Find the standard deviation of observations for each month
-    group_by(month, depth) %>% 
-    summarise(sd = sd(observed)) %>%
-    group_by(depth) %>%
-    summarise(sd = mean(sd, na.rm = T)) %>%
+    for_lm <-
+      targets %>%
+      mutate(time = ymd(time)) %>%
+      # only for the last two years, ensure each DOY has two data points
+      filter(between(time, (start - years(2) + days(2)), start),
+             depth == depth_use) %>%
+      # day of year (as if leap year)
+      mutate(doy = ifelse(yday(time) > 59 & lubridate::leap_year(time) == F,
+                          yday(time) + 1,
+                          yday(time))) %>%
+      group_by(doy, depth) %>% 
+      # find which year it is (the first or second)
+      mutate(yr = row_number()) %>% 
+      select(-time, -site_id, -variable) %>%
+      pivot_wider(names_from = yr, values_from = observed, names_prefix = 'yr')
     
-    # Combine with the point forecast (DOY mean)
+    clim_uncertainty$sd[i] <- round(sd(residuals(lm(yr1~yr2, for_lm))), 2)
+    
+  }
+    
+    # Combine with the point forecast (DOY mean) with uncertainty
+  clim_forecast <- clim_uncertainty %>%
     full_join(clim_forecast, ., by='depth') %>%
     mutate(start_time = start) %>%
     
@@ -166,8 +182,8 @@ forecast.clim <- function(targets = targets, start, h=14) {
     tidyr::complete(., depth, time) %>%
     
     # If there is a gap in the forecast, linearly interpolate, should only be for leap year missingness
-    mutate(predicted = imputeTS::na_interpolation(predicted),
-           sd = imputeTS::na_interpolation(sd)) %>%
+    # mutate(predicted = imputeTS::na_interpolation(predicted),
+    #        sd = imputeTS::na_interpolation(sd)) %>%
     mutate(model_id = 'climatology') 
   
   message('climatology forecast for ', start)
@@ -180,7 +196,7 @@ climatology <- forecast_dates %>%
   map_dfr( ~ forecast.clim(targets = targets, start = .x)) #%>%
 
 # Function to create an ensemble from the mean and standard deviation
-create.ensemble <- function(climatology, times = 200) {
+create.ensemble <- function(climatology, times = 256) {
   data.frame(ensemble = 1:times, predicted = rnorm(n=times, mean = climatology$predicted, sd= climatology$sd)) %>%
     mutate(time = climatology$time, 
            start_time = climatology$start_time,
