@@ -22,21 +22,21 @@ ler_forecast <- read_csv('./forecasts/ler_forecast.csv.gz') %>%
                               model_id == 'ms1_ler_flare_Simstrat' ~ ensemble + 2000))
 # Individual process model forecasts
 GOTM_forecast <- read_csv('./forecasts/GOTM_forecast.csv.gz') %>%
-  filter(depth == 1 &
+  filter(#depth == 1 &
            variable == 'temperature')
 GLM_forecast <- read_csv('./forecasts/GLM_forecast.csv.gz') %>%
-  filter(depth == 1 &
+  filter(#depth == 1 &
            variable == 'temperature')
 Simstrat_forecast <- read_csv('./forecasts/Simstrat_forecast.csv.gz') %>%
-  filter(depth == 1 &
+  filter(#depth == 1 &
            variable == 'temperature')
 
 # Baseline forecasts
 RW_forecast <- read_csv('./forecasts/RW_forecast.csv.gz') %>%
-  filter(depth == 1 &
+  filter(#depth == 1 &
            variable == 'temperature')
 climatology_forecast <- read_csv('./forecasts/climatology_forecast.csv.gz')  %>%
-  filter(depth == 1 &
+  filter(#depth == 1 &
            variable == 'temperature')
 
 # Combine the empirical forecasts
