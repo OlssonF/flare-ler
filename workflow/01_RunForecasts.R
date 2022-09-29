@@ -30,15 +30,16 @@ ds_ler <- arrow::open_dataset(s3_ler, format = "csv")
 ler_forecast <- ds_ler |> 
   # At the moment just looking at 1 depth
   filter(variable == 'temperature') %>%
-  dplyr::collect()
+  dplyr::collect() %>%
+  rename(datetime = time)
 
 # Extract individual model forecasts
 GLM_forecast <- ler_forecast %>%
-  filter(model_id == 'ms1_ler_flare_GLM')
+  filter(model_id == 'GLM')
 GOTM_forecast <- ler_forecast %>%
-  filter(model_id == 'ms1_ler_flare_GOTM')
+  filter(model_id == 'GOTM')
 Simstrat_forecast <- ler_forecast %>%
-  filter(model_id == 'ms1_ler_flare_Simstrat')
+  filter(model_id == 'Simstrat')
 
 #### b) Baseline forecasts ####
 # Targets data needed to produce baseline forecasts
@@ -105,7 +106,8 @@ RW_forecast <- purrr::pmap_dfr(forecast_vars, forecast.RW) %>%
   mutate(site_id = 'fcre',
          variable = 'temperature',
          forecast = 0,
-         variable_type = 'state')
+         variable_type = 'state') %>%
+  rename(datetime = time)
 
 #========================#
 
@@ -212,7 +214,8 @@ climatology_forecast <- climatology %>%
          site_id = 'fcre',
          variable = 'temperature',
          forecast = 0,
-         variable_type = 'state')
+         variable_type = 'state') %>%
+  rename(datetime = time)
 #=============================#
 
 #### c) Write forecasts to file ####
