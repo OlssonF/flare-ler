@@ -17,9 +17,9 @@ ler_forecast <- read_csv('./forecasts/ler_forecast.csv.gz') %>%
   filter(depth == 1 &
          variable == 'temperature') %>%
   # Recode the ensemble - gives an ensemble of 400
-  mutate(ensemble = case_when(model_id == 'ms1_ler_flare_GLM' ~ ensemble,
-                              model_id == 'ms1_ler_flare_GOTM' ~ ensemble + 1000,
-                              model_id == 'ms1_ler_flare_Simstrat' ~ ensemble + 2000))
+  mutate(ensemble = case_when(model_id == 'GLM' ~ ensemble,
+                              model_id == 'GOTM' ~ ensemble + 1000,
+                              model_id == 'Simstrat' ~ ensemble + 2000))
 # Individual process model forecasts
 GOTM_forecast <- read_csv('./forecasts/GOTM_forecast.csv.gz') %>%
   filter(#depth == 1 &
@@ -51,9 +51,9 @@ empirical_ler_forecast <- bind_rows(RW_forecast, climatology_forecast) %>%
   # Recode the ensemble - gives an ensemble of 400
   mutate(ensemble = case_when(model_id == 'RW' ~ ensemble,
                               model_id == 'climatology' ~ensemble + 1000,
-                              model_id == 'ms1_ler_flare_GLM' ~ ensemble + 2000,
-                              model_id == 'ms1_ler_flare_GOTM' ~ ensemble + 3000,
-                              model_id == 'ms1_ler_flare_Simstrat' ~ ensemble + 4000))
+                              model_id == 'GLM' ~ ensemble + 2000,
+                              model_id == 'GOTM' ~ ensemble + 3000,
+                              model_id == 'Simstrat' ~ ensemble + 4000))
 
 #### b) Resample multi-model ensembles ####
 # For the multi-model ensembles resample the forecasts to get a ensemble of n = 200,
