@@ -43,7 +43,7 @@ Simstrat_forecast <- ler_forecast %>%
 
 #### b) Baseline forecasts ####
 # Targets data needed to produce baseline forecasts
-targets <- read_csv('https://s3.flare-forecast.org/targets/ler/fcre/fcre-targets-insitu.csv') %>%
+targets <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') %>%
   filter(variable == 'temperature')
 
 # When to produce forecasts for
@@ -55,7 +55,7 @@ forecast_vars <- expand.grid(start = forecast_dates,
   mutate(h = 14)
 
 ##### Random walk #####
-forecast.RW  <- function(start, h= 14, depth_use) {
+forecast.RW  <- function(start, h= 15, depth_use) {
   
   # Work out when the forecast should start
   forecast_starts <- targets %>%
@@ -106,7 +106,8 @@ RW_forecast <- purrr::pmap_dfr(forecast_vars, forecast.RW) %>%
   mutate(site_id = 'fcre',
          variable = 'temperature',
          forecast = 0,
-         variable_type = 'state') %>%
+         variable_type = 'state',
+         pub_time = Sys.time()) %>%
   rename(datetime = time)
 
 #========================#
@@ -130,7 +131,7 @@ forecast.clim <- function(targets = targets, start, h=14) {
     summarise(predicted = mean(observed))
   
   # Day of year of the forecast dates
-  forecast_doy <- data.frame(time = seq(start, as_date(start + lubridate::days(h-1)), "1 day")) %>%
+  forecast_doy <- data.frame(time = seq(start, as_date(start + lubridate::days(h)), "1 day")) %>%
     mutate(doy = yday(time)) 
   
   # All combinations of doy and depth
@@ -214,7 +215,8 @@ climatology_forecast <- climatology %>%
          site_id = 'fcre',
          variable = 'temperature',
          forecast = 0,
-         variable_type = 'state') %>%
+         variable_type = 'state',
+         pub_time = Sys.time()) %>%
   rename(datetime = time)
 #=============================#
 
