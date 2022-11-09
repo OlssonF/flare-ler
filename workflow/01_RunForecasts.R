@@ -16,30 +16,99 @@ Sys.setenv("AWS_EC2_METADATA_DISABLED"="TRUE")
 Sys.setenv('USE_HTTPS' = TRUE)
 options(dplyr.summarise.inform = FALSE)
 
+if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)){
+  setwd('../')
+}
+
 #### a) LER forecasts ####
 # The LER foreacsts are produced within the FLARE-LER workflow
 
 # Read in the raw forecasts from s3 bucket
-s3_ler <- arrow::s3_bucket(bucket = "test-csv/ler_ms/fcre",
-                                endpoint_override =  "s3.flare-forecast.org",
-                                anonymous = TRUE)
+s3_ler <- arrow::s3_bucket(bucket = "test-csv/ler_ms/parquet",
+                           endpoint_override =  "s3.flare-forecast.org",
+                           anonymous = TRUE)
 
-ds_ler <- arrow::open_dataset(s3_ler, format = "csv")
+ds_ler <- arrow::open_dataset(s3_ler) 
 
-# Fetch forecast from S3 bucket
-ler_forecast <- ds_ler |> 
-  # At the moment just looking at 1 depth
-  filter(variable == 'temperature') %>%
-  dplyr::collect() %>%
-  rename(datetime = time)
+ler_parquet_files <- ds_ler$files[which(is.na(str_match(ds_ler$files, "GLM/")))]
 
-# Extract individual model forecasts
-GLM_forecast <- ler_forecast %>%
-  filter(model_id == 'GLM')
-GOTM_forecast <- ler_forecast %>%
-  filter(model_id == 'GOTM')
-Simstrat_forecast <- ler_forecast %>%
-  filter(model_id == 'Simstrat')
+for (i in 1:length(ler_parquet_files)) {
+  file_use <-  ler_parquet_files[i]
+  
+  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+  
+  forecast <- ds_ler |> 
+    filter(reference_date == date_use &
+             model_id == model_use) %>%
+    dplyr::collect()
+  
+  # test <- bind_rows(test, forecast)
+  data.table::fwrite(forecast, './forecasts/ler_v2_forecast.csv.gz', append = T)
+  message(i)
+  
+}
+
+# GLM forecasts
+GLM_v2_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GLM_2/")))]
+
+for (i in 1:length(GLM_v2_parquet_files)) {
+  file_use <-  GLM_v2_parquet_files[i]
+  
+  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+  
+  forecast <- ds_ler |> 
+    filter(reference_date == date_use &
+             model_id == model_use) %>%
+    dplyr::collect()
+  
+  # test <- bind_rows(test, forecast)
+  data.table::fwrite(forecast, './forecasts/GLM_v2_forecast.csv.gz', append = T)
+  message(i)
+  
+}
+
+# GOTM forecasts
+GOTM_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GOTM/")))]
+
+for (i in 1:length(ler_parquet_files)) {
+  file_use <-  ler_parquet_files[i]
+  
+  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+  
+  forecast <- ds_ler |> 
+    filter(reference_date == date_use &
+             model_id == model_use) %>%
+    dplyr::collect()
+  
+  # test <- bind_rows(test, forecast)
+  data.table::fwrite(forecast, './forecasts/GOTM_forecast.csv.gz', append = T)
+  message(i)
+  
+}
+
+# Simstrat forecasts
+Simstrat_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "Simstrat/")))]
+
+for (i in 1:length(ler_parquet_files)) {
+  file_use <-  ler_parquet_files[i]
+  
+  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+  
+  forecast <- ds_ler |> 
+    filter(reference_date == date_use &
+             model_id == model_use) %>%
+    dplyr::collect()
+  
+  # test <- bind_rows(test, forecast)
+  data.table::fwrite(forecast, './forecasts/Simstrat_forecast.csv.gz', append = T)
+  message(i)
+  
+}
+
 
 #### b) Baseline forecasts ####
 # Targets data needed to produce baseline forecasts
@@ -47,7 +116,7 @@ targets <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targ
   filter(variable == 'temperature')
 
 # When to produce forecasts for
-forecast_dates <- seq.Date(as.Date(min(ler_forecast$start_time)),as.Date(max(ler_forecast$start_time)), 7)
+forecast_dates <- seq.Date(as.Date('2020-10-25'),as.Date('2022-10-16'), 7)
 
 # data frame with all depth and start_date combinations to be forecast
 forecast_vars <- expand.grid(start = forecast_dates, 
