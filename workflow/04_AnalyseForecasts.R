@@ -11,7 +11,7 @@ library(tidyverse)
 library(lubridate)
 
 #### a) read in scored forecasts ####
-score_files <- list.files('./scores/', full.names = T)
+score_files <- list.files('./scores/', full.names = T, pattern = '.parquet')
 
 for (i in 1:length(score_files)) {
   name <- gsub('_forecast.parquet', '_scored', gsub('./scores/', '',score_files[i]))
@@ -24,7 +24,44 @@ for (i in 1:length(score_files)) {
   message('read in ', name)
 }
 
-# extract list of diferent types of scored forecasts for comparisons
+# calculate shadowing time
+shadow_length <- function(df) {
+  df <- df %>%
+    filter(variable == 'temperature'&
+             horizon >= 0 &
+             !is.na(observation))
+  
+  shadow_rle <- rle(df$shadow) 
+  max_shadow <- shadow_rle$lengths[min(which(shadow_rle$values == T))]
+  shadow_length <- df$horizon[max_shadow]
+  return(shadow_length)
+}
+
+shadow_length_grouped <- function(df) {
+  df %>%
+    filter(variable == 'temperature'&
+             horizon >= 0 &
+             !is.na(observation)) %>%
+    mutate(shadow = ifelse(observation <= quantile97.5 &
+                             observation >= quantile02.5,
+                           T, F)) %>%
+    group_by(site_id, reference_datetime) %>%
+    summarise(shadow_length = shadow_length(df = .)) 
+}
+
+
+# calculate shadow length for all forecasts
+all_df <- ls(pattern = 'scored')
+
+for (i in all_df) {
+  temp <- shadow_length_grouped(get(i))
+  assign(x = gsub(pattern = '_scored', '_shadow', i), temp)
+}
+
+
+
+
+#extract list of diferent types of scored forecasts for comparisons
 all_df <- ls(pattern = 'scored')
 empirical_forecasts <- all_df[c(grep('empirical', all_df),
                                 grep('climatology', all_df),
@@ -52,7 +89,7 @@ example_forecast <- ensemble_scored %>%
          site_id == 'fcre-8') %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
-  geom_point(aes(y=observed)) +
+  geom_point(aes(y=observation)) +
   geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, 
                   fill =model_id, group = interaction(reference_datetime, model_id)), alpha = 0.2)+
   geom_line(aes(y=mean, colour = model_id, group = interaction(reference_datetime, model_id))) +
@@ -69,7 +106,7 @@ example_forecast <- individual_scored %>%
          site_id == 'fcre-1') %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
-  geom_point(aes(y=observed)) +
+  geom_point(aes(y=observation)) +
   geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, 
                   fill =model_id, group = interaction(reference_datetime, model_id)), alpha = 0.2)+
   geom_line(aes(y=mean, colour = model_id, group = interaction(reference_datetime, model_id))) +
@@ -79,7 +116,7 @@ example_forecast <- individual_scored %>%
 
 # Compare the different model ensemble scores
 ensemble_crps_p <- ensemble_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -94,7 +131,7 @@ ensemble_crps_p <- ensemble_scored %>%
   theme_bw()
 
 ensemble_logs_p <- ensemble_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -111,7 +148,7 @@ ensemble_logs_p <- ensemble_scored %>%
 
 
 all_crps_p <-all_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -127,7 +164,7 @@ all_crps_p <-all_scored %>%
   theme_bw()
 
 all_logs_p <-all_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -144,7 +181,7 @@ all_logs_p <-all_scored %>%
 
 
 empirical_crps_p <- all_empirical_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -160,7 +197,7 @@ empirical_crps_p <- all_empirical_scored %>%
   theme_bw()
 
 empirical_logs_p <- all_empirical_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -178,7 +215,7 @@ empirical_logs_p <- all_empirical_scored %>%
 
 
 individual_crps_p <- individual_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -194,7 +231,7 @@ individual_crps_p <- individual_scored %>%
   theme_bw()
 
 individual_logs_p <- individual_scored %>%
-  mutate(bias = mean - observed,
+  mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -219,7 +256,7 @@ as_season <- function(datetime) {
 
 ensemble_season_p <- ensemble_scored %>%
   mutate(season = as_season(datetime),
-         bias = mean - observed,
+         bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
@@ -236,7 +273,7 @@ ensemble_season_p <- ensemble_scored %>%
 
 all_season_p <- all_empirical_scored %>%
   mutate(season = as_season(datetime),
-         bias = mean - observed,
+         bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
