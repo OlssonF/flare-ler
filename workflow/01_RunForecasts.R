@@ -72,8 +72,8 @@ for (i in 1:length(GLM_v2_parquet_files)) {
 # GOTM forecasts
 GOTM_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GOTM/")))]
 
-for (i in 1:length(ler_parquet_files)) {
-  file_use <-  ler_parquet_files[i]
+for (i in 1:length(GOTM_parquet_files)) {
+  file_use <-  GOTM_parquet_files[i]
   
   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
@@ -92,8 +92,8 @@ for (i in 1:length(ler_parquet_files)) {
 # Simstrat forecasts
 Simstrat_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "Simstrat/")))]
 
-for (i in 1:length(ler_parquet_files)) {
-  file_use <-  ler_parquet_files[i]
+for (i in 1:length(Simstrat_parquet_files)) {
+  file_use <-  Simstrat_parquet_files[i]
   
   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
@@ -156,8 +156,8 @@ forecast.RW  <- function(start, h= 15, depth_use) {
                            bootstrap = T,
                            times = 256) %>%
       rename(model_id = .model,
-             predicted = .sim,
-             ensemble = .rep) %>%
+             prediction = .sim,
+             parameter = .rep) %>%
       as_tibble() %>% 
       mutate(#h = as.numeric(time - min(time) + 1),
         start_time = start) 
@@ -197,7 +197,7 @@ forecast.clim <- function(targets = targets, start, h=14) {
     
     # find the day of year average
     group_by(doy, depth) %>%
-    summarise(predicted = mean(observed))
+    summarise(prediction = mean(observed))
   
   # Day of year of the forecast dates
   forecast_doy <- data.frame(time = seq(start, as_date(start + lubridate::days(h)), "1 day")) %>%
@@ -254,12 +254,12 @@ forecast.clim <- function(targets = targets, start, h=14) {
     tidyr::complete(., depth, time) %>%
     
     # If there is a gap in the forecast, linearly interpolate, should only be for leap year missingness
-    # mutate(predicted = imputeTS::na_interpolation(predicted),
+    # mutate(prediction = imputeTS::na_interpolation(prediction),
     #        sd = imputeTS::na_interpolation(sd)) %>%
     mutate(model_id = 'climatology') 
   
   message('climatology forecast for ', start)
-  return(clim_forecast[, c('model_id', 'time', 'start_time', 'depth', 'predicted', 'sd')])
+  return(clim_forecast[, c('model_id', 'time', 'start_time', 'depth', 'prediction', 'sd')])
   
 }
 
@@ -269,7 +269,10 @@ climatology <- forecast_dates %>%
 
 # Function to create an ensemble from the mean and standard deviation
 create.ensemble <- function(climatology, times = 256) {
-  data.frame(ensemble = 1:times, predicted = rnorm(n=times, mean = climatology$predicted, sd= climatology$sd)) %>%
+  data.frame(parameter = 1:times, 
+             prediction = rnorm(n=times, 
+                                mean = climatology$prediction, 
+                                sd= climatology$sd)) %>%
     mutate(time = climatology$time, 
            start_time = climatology$start_time,
            depth = climatology$depth)
