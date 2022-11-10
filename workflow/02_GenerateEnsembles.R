@@ -14,6 +14,9 @@ library(lubridate)
 if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
   setwd('../')
 } 
+
+rm(list = ls())
+gc()
 #### a) Create multi-model ensembles ####
 # LER forecast
 # ler_forecast <- data.table::fread('./forecasts/ler_forecast.csv.gz') %>%
@@ -24,28 +27,32 @@ if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
 #                               model_id == 'Simstrat' ~ as.numeric(parameter) + 2000))
 
 # Individual process model forecasts
+message('read in individual models from file')
 GOTM_forecast <- data.table::fread('./forecasts/GOTM_forecast.csv.gz') %>%
   filter(variable == 'temperature') %>%
   mutate(parameter = parameter + 0)
+message('GOTM read')
 GLM_forecast <- data.table::fread('./forecasts/GLM_v2_forecast.csv.gz') %>%
   filter(variable == 'temperature') %>%
   mutate(parameter = parameter + 1000)
+message('GLM read')
 Simstrat_forecast <- data.table::fread('./forecasts/Simstrat_forecast.csv.gz') %>%
   filter(variable == 'temperature')  %>%
   mutate(parameter = parameter + 2000)
-
+message('Simstrat read')
 # Baseline forecasts
 RW_forecast <- data.table::fread('./forecasts/RW_forecast.csv.gz') %>%
   filter(variable == 'temperature') %>%
   mutate(start_time = as.POSIXct(start_time),
          datetime = as.POSIXct(datetime),
          parameter = parameter + 3000)
+message('Persistence read')
 climatology_forecast <- data.table::fread('./forecasts/climatology_forecast.csv.gz')  %>%
   filter(variable == 'temperature')  %>%
   mutate(start_time = as.POSIXct(start_time),
          datetime = as.POSIXct(datetime),
          parameter = parameter + 4000)
-
+message('Climatology read')
 # function to create the multi-model ensemble, by resampling each individual model
 # ensemble before combining
 
@@ -68,6 +75,7 @@ create.mme <- function(forecasts, n = 256) {
 }
 
 ##### Generate the multi model ensembles ####
+message('generate the multi-model ensembles')
 empirical_256_forecast <- create.mme(forecasts = c('RW_forecast',
                                                    'climatology_forecast'))
 
@@ -143,7 +151,7 @@ forecasts_env <- ls(pattern = 'forecast')
 # the forecasts derived in this script are the combined empirical and the resampled MMEs
 forecasts_write <- unique(c(forecasts_env[str_detect(forecasts_env, '256')], 
                             forecasts_env[str_detect(forecasts_env, 'empirical')]))
-
+message('write multi-model ensembles')
 for (i in 1:length(forecasts_write)) {
   get(forecasts_write[i]) %>%
     mutate(model_id = gsub('_forecast', '', forecasts_write[i])) %>%
