@@ -174,6 +174,7 @@ RW_forecast <- purrr::pmap_dfr(forecast_vars, forecast.RW) %>%
   # Add in the additional columns needed to score the forecast (like the FLARE output)
   mutate(site_id = 'fcre',
          variable = 'temperature',
+         family = 'ensemble',
          forecast = 0,
          variable_type = 'state',
          pub_time = Sys.time()) %>%
@@ -286,6 +287,7 @@ climatology_forecast <- climatology %>%
   mutate(model_id = 'climatology',
          site_id = 'fcre',
          variable = 'temperature',
+         family = 'ensemble',
          forecast = 0,
          variable_type = 'state',
          pub_time = Sys.time()) %>%
@@ -298,12 +300,12 @@ forecasts <- ls(pattern = '_forecast')
 for (i in 1:length(forecasts)) {
   
   if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
-    write_csv(get(forecasts[i]), paste0('../forecasts/',        
+    data.table::fwrite(get(forecasts[i]), paste0('../forecasts/',        
                                         forecasts[i],
                                         '.csv.gz'))
     
   } else {
-    write_csv(get(forecasts[i]), paste0('./forecasts/',
+    data.table::fwrite(get(forecasts[i]), paste0('./forecasts/',
                                         forecasts[i],
                                         '.csv.gz'))
   }
