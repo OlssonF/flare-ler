@@ -6,8 +6,13 @@ library(FLAREr)
 library(arrow)
 library(tidyverse)
 library(lubridate)
-
 rm(list = ls())
+
+if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
+  setwd('../')
+} 
+
+source('./R/scoring_function.R')
 
 #### c) Score forecasts ####
 # Get a list of the forecasts to be scored
@@ -16,7 +21,7 @@ forecast_files <- list.files('./forecasts', pattern = '.gz')
 
 for (i in 1:length(forecast_files)) {
   forecast_file <- paste0('./forecasts/', forecast_files[i])
-  FLAREr::generate_forecast_score(targets_file = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+  generate_forecast_score_2(targets_file = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
                                   forecast_file = forecast_file,
                                   output_directory = './scores')
   message(forecast_files[i], ' scored')
