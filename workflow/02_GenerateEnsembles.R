@@ -5,8 +5,8 @@
 # 5 individual models (3 process based, 2 empirical baseline)
 # and then 3 multi-model ensembles (LER, empirical baselines, LER+baselines) 
 
-library(GLM3r)
-library(FLAREr)
+# library(GLM3r)
+# library(FLAREr)
 library(arrow)
 library(tidyverse)
 library(lubridate)
@@ -26,32 +26,43 @@ gc()
 #                               model_id == 'GOTM' ~ as.numeric(parameter) + 1000,
 #                               model_id == 'Simstrat' ~ as.numeric(parameter) + 2000))
 
+columns_need <- c("datetime", "depth",
+                  "family", "model_id",
+                  "parameter", "prediction", 
+                  "reference_datetime",
+                  "site_id", "variable")
+
 # Individual process model forecasts
 message('read in individual models from file')
 GOTM_forecast <- data.table::fread('./forecasts/GOTM_forecast.csv.gz') %>%
   filter(variable == 'temperature') %>%
-  mutate(parameter = parameter + 0)
+  mutate(parameter = parameter + 0) %>%
+  select(columns_need)
 message('GOTM read')
 GLM_forecast <- data.table::fread('./forecasts/GLM_v2_forecast.csv.gz') %>%
   filter(variable == 'temperature') %>%
-  mutate(parameter = parameter + 1000)
+  mutate(parameter = parameter + 1000)%>%
+  select(columns_need)
 message('GLM read')
 Simstrat_forecast <- data.table::fread('./forecasts/Simstrat_forecast.csv.gz') %>%
   filter(variable == 'temperature')  %>%
-  mutate(parameter = parameter + 2000)
+  mutate(parameter = parameter + 2000) %>%
+  select(columns_need)
 message('Simstrat read')
 # Baseline forecasts
 RW_forecast <- data.table::fread('./forecasts/RW_forecast.csv.gz') %>%
   filter(variable == 'temperature') %>%
-  mutate(start_time = as.POSIXct(start_time),
+  mutate(reference_datetime = as.POSIXct(reference_datetime),
          datetime = as.POSIXct(datetime),
-         parameter = parameter + 3000)
+         parameter = parameter + 3000) %>%
+  select(columns_need)
 message('Persistence read')
 climatology_forecast <- data.table::fread('./forecasts/climatology_forecast.csv.gz')  %>%
   filter(variable == 'temperature')  %>%
-  mutate(start_time = as.POSIXct(start_time),
+  mutate(reference_datetime = as.POSIXct(reference_datetime),
          datetime = as.POSIXct(datetime),
-         parameter = parameter + 4000)
+         parameter = parameter + 4000) %>%
+  select(columns_need)
 message('Climatology read')
 # function to create the multi-model ensemble, by resampling each individual model
 # ensemble before combining
