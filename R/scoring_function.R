@@ -16,7 +16,7 @@ generate_forecast_score_2 <- function(targets_file,
   
   forecast <- forecast_file %>%
     read4cast::read_forecast() %>%
-    select(-any_of(pub_time)) %>%
+    # select(-any_of(pub_time)) %>%
     filter(variable_type == "state") %>%
     dplyr::mutate(filename = forecast_file,
                   site_id = paste0(site_id,"-",depth)) %>%
