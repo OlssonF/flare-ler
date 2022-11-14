@@ -32,6 +32,10 @@ ds_ler <- arrow::open_dataset(s3_ler)
 
 ler_parquet_files <- ds_ler$files[which(is.na(str_match(ds_ler$files, "GLM/")))]
 
+if (!exists('.forecasts/')) {
+  dir.create('./forecasts/')
+}
+
 for (i in 1:length(ler_parquet_files)) {
   file_use <-  ler_parquet_files[i]
   

@@ -14,6 +14,11 @@ if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
 
 source('./R/scoring_function.R')
 
+if (!exists('./scores/')) {
+  dir.create('./scores/')
+}
+
+
 #### c) Score forecasts ####
 # Get a list of the forecasts to be scored
 forecast_files <- list.files('./forecasts', pattern = '.gz')
