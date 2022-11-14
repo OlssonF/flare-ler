@@ -165,14 +165,15 @@ forecast.RW  <- function(start, h= 15, depth_use) {
              prediction = .sim,
              parameter = .rep) %>%
       as_tibble() %>% 
-      mutate(start_time = start,
+      mutate(reference_datetime = start,
              # Add in the additional columns needed to score the forecast (like the FLARE output)
              site_id = 'fcre',
              variable = 'temperature',
-             family = 'ensemble',
-             forecast = 0,
-             variable_type = 'state',
-             pub_time = Sys.time()) 
+             family = 'ensemble'#,
+             # forecast = 0,
+             # variable_type = 'state',
+             # pub_time = Sys.time()
+             ) 
     
     message('RW forecast for ', start, ' at ', depth_use, ' m')
     return(RW_forecast)
@@ -252,10 +253,10 @@ forecast.clim <- function(targets = targets, start, h=14) {
     # Combine with the point forecast (DOY mean) with uncertainty
   clim_forecast <- clim_uncertainty %>%
     full_join(clim_forecast, ., by='depth') %>%
-    mutate(start_time = start) %>%
+    mutate(reference_datetime = start) %>%
     
-    # makes sure there are all combinations of site and datetime for each start_Time
-    group_by(start_time) %>%
+    # makes sure there are all combinations of site and datetime for each reference_datetime
+    group_by(reference_datetime) %>%
     tidyr::complete(., depth, datetime) %>%
     
     # If there is a gap in the forecast, linearly interpolate, should only be for leap year missingness
@@ -264,7 +265,7 @@ forecast.clim <- function(targets = targets, start, h=14) {
     mutate(model_id = 'climatology') 
   
   message('climatology forecast for ', start)
-  return(clim_forecast[, c('model_id', 'datetime', 'start_time', 'depth', 'prediction', 'sd')])
+  return(clim_forecast[, c('model_id', 'datetime', 'reference_datetime', 'depth', 'prediction', 'sd')])
   
 }
 
@@ -279,11 +280,11 @@ create.ensemble <- function(climatology, times = 256) {
                                 mean = climatology$prediction, 
                                 sd= climatology$sd)) %>%
     mutate(datetime = climatology$datetime, 
-           start_time = climatology$start_time,
+           reference_datetime = climatology$reference_datetime,
            depth = climatology$depth)
 }
 
-# Run the function over each row (datetime, start_time and depth combination)
+# Run the function over each row (datetime, reference_datetime and depth combination)
 climatology_forecast <- climatology %>%
   split(1:nrow(.)) %>%
   purrr::map_dfr(create.ensemble) %>%
