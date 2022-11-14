@@ -22,9 +22,11 @@ if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)){
 
 #### a) LER forecasts ####
 # The LER foreacsts are produced within the FLARE-LER workflow
+# These workflows append generate warning and stop if forecasts
+readline(prompt="These downloads will append to existing. Press [enter] to continue or delete files to redownload")
 
 # Read in the raw forecasts from s3 bucket
-s3_ler <- arrow::s3_bucket(bucket = "test-csv/ler_ms/parquet",
+s3_ler <- arrow::s3_bucket(bucket = "forecasts/ler_ms2/parquet",
                            endpoint_override =  "s3.flare-forecast.org",
                            anonymous = TRUE)
 
@@ -132,27 +134,27 @@ forecast.RW  <- function(start, h= 15, depth_use) {
   
   # Work out when the forecast should start
   forecast_starts <- targets %>%
-    dplyr::filter(!is.na(observed) & depth == depth_use & time < start)
+    dplyr::filter(!is.na(observation) & depth == depth_use & datetime < start)
   
   if (nrow(forecast_starts) !=0) {
     forecast_starts <- forecast_starts %>% 
       # Start the day after the most recent non-NA value
-      dplyr::summarise(start_date = ymd(max(time) + lubridate::days(1))) %>% # Date
+      dplyr::summarise(start_date = ymd(max(datetime) + lubridate::days(1))) %>% # Date
       dplyr::mutate(h = (start - start_date) + h) %>% # Horizon value
       dplyr::ungroup()
     
     # Generate the RW model
     RW_model <- targets %>%
-      mutate(time = as_date(time)) %>%
+      mutate(datetime = as_date(datetime)) %>%
       # filter the targets data for the depth and start time
-      dplyr::filter(depth == depth_use & time < start) %>%
-      tsibble::as_tsibble(key = 'depth', index = 'time') %>%
+      dplyr::filter(depth == depth_use & datetime < start) %>%
+      tsibble::as_tsibble(key = 'depth', index = 'datetime') %>%
       # add NA values
       tsibble::fill_gaps() %>%
       # Remove the NA's put at the end, so that the forecast starts from the last day with an observation,
       # rather than today
-      dplyr::filter(time < forecast_starts$start_date) %>%
-      fabletools::model(RW = fable::RW(observed))
+      dplyr::filter(datetime < forecast_starts$start_date) %>%
+      fabletools::model(RW = fable::RW(observation))
     
     # Generate the forecast
     RW_forecast <- RW_model %>%
@@ -163,8 +165,14 @@ forecast.RW  <- function(start, h= 15, depth_use) {
              prediction = .sim,
              parameter = .rep) %>%
       as_tibble() %>% 
-      mutate(#h = as.numeric(time - min(time) + 1),
-        start_time = start) 
+      mutate(start_time = start,
+             # Add in the additional columns needed to score the forecast (like the FLARE output)
+             site_id = 'fcre',
+             variable = 'temperature',
+             family = 'ensemble',
+             forecast = 0,
+             variable_type = 'state',
+             pub_time = Sys.time()) 
     
     message('RW forecast for ', start, ' at ', depth_use, ' m')
     return(RW_forecast)
@@ -174,15 +182,7 @@ forecast.RW  <- function(start, h= 15, depth_use) {
 }
 
 # Produces forecast for all depths and date combinations
-RW_forecast <- purrr::pmap_dfr(forecast_vars, forecast.RW) %>%
-  # Add in the additional columns needed to score the forecast (like the FLARE output)
-  mutate(site_id = 'fcre',
-         variable = 'temperature',
-         family = 'ensemble',
-         forecast = 0,
-         variable_type = 'state',
-         pub_time = Sys.time()) %>%
-  rename(datetime = time)
+RW_forecast <- purrr::pmap_dfr(forecast_vars, forecast.RW)
 
 #========================#
 
@@ -193,20 +193,20 @@ RW_forecast <- purrr::pmap_dfr(forecast_vars, forecast.RW) %>%
 forecast.clim <- function(targets = targets, start, h=14) {
   # only the targets available before should be used to produce the forecast
   doy_targets <- targets %>%
-    filter(time < start) %>%
+    filter(datetime < start) %>%
     
     # this gives the day of year as if it were a leap year
-    mutate(doy = ifelse((yday(time) > 59 & lubridate::leap_year(time) != T),
-                        yday(time) + 1,
-                        yday(time))) %>%
+    mutate(doy = ifelse((yday(datetime) > 59 & lubridate::leap_year(datetime) != T),
+                        yday(datetime) + 1,
+                        yday(datetime))) %>%
     
     # find the day of year average
     group_by(doy, depth) %>%
-    summarise(prediction = mean(observed))
+    summarise(prediction = mean(observation))
   
   # Day of year of the forecast dates
-  forecast_doy <- data.frame(time = seq(start, as_date(start + lubridate::days(h)), "1 day")) %>%
-    mutate(doy = yday(time)) 
+  forecast_doy <- data.frame(datetime = seq(start, as_date(start + lubridate::days(h)), "1 day")) %>%
+    mutate(doy = yday(datetime)) 
   
   # All combinations of doy and depth
   site_doy <- expand.grid(doy = forecast_doy$doy, depth = unique(targets$depth))
@@ -231,19 +231,19 @@ forecast.clim <- function(targets = targets, start, h=14) {
     
     for_lm <-
       targets %>%
-      mutate(time = ymd(time)) %>%
+      mutate(datetime = ymd(datetime)) %>%
       # only for the last two years, ensure each DOY has two data points
-      filter(between(time, (start - years(2) + days(2)), start),
+      filter(between(datetime, (start - years(2) + days(2)), start),
              depth == depth_use) %>%
       # day of year (as if leap year)
-      mutate(doy = ifelse(yday(time) > 59 & lubridate::leap_year(time) == F,
-                          yday(time) + 1,
-                          yday(time))) %>%
+      mutate(doy = ifelse(yday(datetime) > 59 & lubridate::leap_year(datetime) == F,
+                          yday(datetime) + 1,
+                          yday(datetime))) %>%
       group_by(doy, depth) %>% 
       # find which year it is (the first or second)
       mutate(yr = row_number()) %>% 
-      select(-time, -site_id, -variable) %>%
-      pivot_wider(names_from = yr, values_from = observed, names_prefix = 'yr')
+      select(-datetime, -site_id, -variable) %>%
+      pivot_wider(names_from = yr, values_from = observation, names_prefix = 'yr')
     
     clim_uncertainty$sd[i] <- round(sd(residuals(lm(yr1~yr2, for_lm))), 2)
     
@@ -254,9 +254,9 @@ forecast.clim <- function(targets = targets, start, h=14) {
     full_join(clim_forecast, ., by='depth') %>%
     mutate(start_time = start) %>%
     
-    # makes sure there are all combinations of site and time for each start_Time
+    # makes sure there are all combinations of site and datetime for each start_Time
     group_by(start_time) %>%
-    tidyr::complete(., depth, time) %>%
+    tidyr::complete(., depth, datetime) %>%
     
     # If there is a gap in the forecast, linearly interpolate, should only be for leap year missingness
     # mutate(prediction = imputeTS::na_interpolation(prediction),
@@ -264,13 +264,13 @@ forecast.clim <- function(targets = targets, start, h=14) {
     mutate(model_id = 'climatology') 
   
   message('climatology forecast for ', start)
-  return(clim_forecast[, c('model_id', 'time', 'start_time', 'depth', 'prediction', 'sd')])
+  return(clim_forecast[, c('model_id', 'datetime', 'start_time', 'depth', 'prediction', 'sd')])
   
 }
 
 # get the climatology forecast for each date
 climatology <- forecast_dates %>%
-  map_dfr( ~ forecast.clim(targets = targets, start = .x)) #%>%
+  map_dfr( ~ forecast.clim(targets = targets, start = .x)) 
 
 # Function to create an ensemble from the mean and standard deviation
 create.ensemble <- function(climatology, times = 256) {
@@ -278,12 +278,12 @@ create.ensemble <- function(climatology, times = 256) {
              prediction = rnorm(n=times, 
                                 mean = climatology$prediction, 
                                 sd= climatology$sd)) %>%
-    mutate(time = climatology$time, 
+    mutate(datetime = climatology$datetime, 
            start_time = climatology$start_time,
            depth = climatology$depth)
 }
 
-# Run the function over each row (time, start_time and depth combination)
+# Run the function over each row (datetime, start_time and depth combination)
 climatology_forecast <- climatology %>%
   split(1:nrow(.)) %>%
   purrr::map_dfr(create.ensemble) %>%
@@ -294,8 +294,7 @@ climatology_forecast <- climatology %>%
          family = 'ensemble',
          forecast = 0,
          variable_type = 'state',
-         pub_time = Sys.time()) %>%
-  rename(datetime = time)
+         pub_time = Sys.time()) 
 #=============================#
 
 #### c) Write forecasts to file ####
