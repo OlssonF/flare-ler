@@ -45,10 +45,15 @@ for (i in 1:nrow(model_refdates)) {
     mutate(site_id = 'fcre') |>
   collect()
   
-  # Score the forecast
-  generate_forecast_score_arrow(targets_file = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
-                                forecast_df = forecast_df,
-                                local_directory = './scores')
-  message(i, "/", nrow(model_refdates), " forecasts scored")
+  if (nrow(forecast_df) != 0) {
+    # Score the forecast
+    generate_forecast_score_arrow(targets_file = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+                                  forecast_df = forecast_df,
+                                  local_directory = './scores')
+    message(i, "/", nrow(model_refdates), " forecasts scored")
+  } else {
+    message('no forecast for ', model_refdates$model_id[i], ' ', model_refdates$reference_datetime[i] )
+  }
+  
 } 
 #=============================#
