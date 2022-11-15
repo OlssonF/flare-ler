@@ -38,97 +38,20 @@ if (!dir.exists('./forecasts/')) {
 ds_ler |>
   dplyr::filter(model_id == 'GOTM') |>
   dplyr::collect() |>
-  dplyr::group_by(model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts/forecast.parquet')
+  dplyr::group_by(site_id, model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts')
 
 ds_ler |>
   dplyr::filter(model_id == 'GLM') |>
   dplyr::collect() |>
-  dplyr::group_by(model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts/forecast.parquet')
+  dplyr::group_by(site_id, model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts')
 
 ds_ler |>
   dplyr::filter(model_id == 'Simstrat') |>
   dplyr::collect() |>
-  dplyr::group_by(model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts/forecast.parquet')
-
-# for (i in 1:length(ler_parquet_files)) {
-#   file_use <-  ler_parquet_files[i]
-#   
-#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-#   
-#   forecast <- ds_ler |> 
-#     filter(reference_date == date_use &
-#              model_id == model_use) %>%
-#     dplyr::collect()
-#   
-#   # test <- bind_rows(test, forecast)
-#   data.table::fwrite(forecast, './forecasts/ler_v2_forecast.csv.gz', append = T)
-#   message(i)
-#   
-# }
-
-# GLM forecasts
-# GLM_v2_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GLM_2/")))]
-# 
-# for (i in 1:length(GLM_v2_parquet_files)) {
-#   file_use <-  GLM_v2_parquet_files[i]
-#   
-#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-#   
-#   forecast <- ds_ler |> 
-#     filter(reference_date == date_use &
-#              model_id == model_use) %>%
-#     dplyr::collect()
-#   
-#   # test <- bind_rows(test, forecast)
-#   data.table::fwrite(forecast, './forecasts/GLM_v2_forecast.csv.gz', append = T)
-#   message(i)
-#   
-# }
-# 
-# # GOTM forecasts
-# GOTM_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GOTM/")))]
-# 
-# for (i in 1:length(GOTM_parquet_files)) {
-#   file_use <-  GOTM_parquet_files[i]
-#   
-#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-#   
-#   forecast <- ds_ler |> 
-#     filter(reference_date == date_use &
-#              model_id == model_use) %>%
-#     dplyr::collect()
-#   
-#   # test <- bind_rows(test, forecast)
-#   data.table::fwrite(forecast, './forecasts/GOTM_forecast.csv.gz', append = T)
-#   message(i)
-#   
-# }
-# 
-# # Simstrat forecasts
-# Simstrat_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "Simstrat/")))]
-# 
-# for (i in 1:length(Simstrat_parquet_files)) {
-#   file_use <-  Simstrat_parquet_files[i]
-#   
-#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-#   
-#   forecast <- ds_ler |> 
-#     filter(reference_date == date_use &
-#              model_id == model_use) %>%
-#     dplyr::collect()
-#   
-#   # test <- bind_rows(test, forecast)
-#   data.table::fwrite(forecast, './forecasts/Simstrat_forecast.csv.gz', append = T)
-#   message(i)
-#   
-# }
+  dplyr::group_by(site_id, model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts')
 
 
 #### b) Baseline forecasts ####
@@ -322,12 +245,12 @@ for (i in 1:length(forecasts)) {
   
   if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
     get(forecasts[i])|>
-      dplyr::group_by(model_id, reference_datetime) |>
+      dplyr::group_by(site_id, model_id, reference_datetime) |>
       arrow::write_dataset(path = '../forecasts/forecast.parquet')
     
   } else {
     get(forecasts[i])|>
-      dplyr::group_by(model_id, reference_datetime) |>
+      dplyr::group_by(site_id, model_id, reference_datetime) |>
       arrow::write_dataset(path = './forecasts/forecast.parquet') 
   }
   message(forecasts[i],' written')
