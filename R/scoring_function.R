@@ -1,3 +1,4 @@
+# remotes::install_github('eco4cast/neon4cast')
 generate_forecast_score_2 <- function(targets_file,
                                     forecast_file,
                                     output_directory){
