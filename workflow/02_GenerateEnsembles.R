@@ -26,16 +26,10 @@ gc()
 #                               model_id == 'GOTM' ~ as.numeric(parameter) + 1000,
 #                               model_id == 'Simstrat' ~ as.numeric(parameter) + 2000))
 
-columns_need <- c("datetime", "depth",
-                  "family", "model_id",
-                  "parameter", "prediction", 
-                  "reference_datetime",
-                  "site_id", "variable")
-
 # Individual process model forecasts
 message('read in individual models from file')
 
-forecast_parquets <- arrow::open_dataset('./forecasts/forecast.parquet')
+forecast_parquets <- arrow::open_dataset('./forecasts/site_id=fcre')
 
 GOTM_forecast <- forecast_parquets |>
   filter(model_id == 'GOTM',
@@ -85,15 +79,16 @@ create.mme <- function(forecasts, n = 256, ensemble_name) {
       distinct(parameter) %>%
       slice_sample(n = sample) %>%
       left_join(., get(forecasts[i]), by = "parameter") %>%
-      mutate(model_id = ensemble_name) %>%
-      group_by(model_id, reference_datetime)
+      mutate(model_id = ensemble_name,
+             site_id = 'fcre') %>%
+      group_by(site_id, model_id, reference_datetime)
     
     mme_forecast <- bind_rows(mme_forecast, forecast_sample) 
     
   }
   
   mme_forecast |>
-    arrow::write_dataset('forecasts/forecast.parquet')
+    arrow::write_dataset('./forecasts')
   message(ensemble_name, ' generated')
 }
 

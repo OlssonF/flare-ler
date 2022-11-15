@@ -246,12 +246,12 @@ for (i in 1:length(forecasts)) {
   if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
     get(forecasts[i])|>
       dplyr::group_by(site_id, model_id, reference_datetime) |>
-      arrow::write_dataset(path = '../forecasts/forecast.parquet')
+      arrow::write_dataset(path = '../forecasts/')
     
   } else {
     get(forecasts[i])|>
       dplyr::group_by(site_id, model_id, reference_datetime) |>
-      arrow::write_dataset(path = './forecasts/forecast.parquet') 
+      arrow::write_dataset(path = './forecasts/') 
   }
   message(forecasts[i],' written')
 }
