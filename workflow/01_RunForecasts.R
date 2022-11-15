@@ -1,9 +1,8 @@
 # Script 1 in workflow to produce/read in forecasts and write to file
 # The forecasts include 3 process-based models within LER
-  # and 2 "baseline" models (random walk and climatology)
+# and 2 "baseline" models (random walk and climatology)
 
-library(GLM3r)
-library(FLAREr)
+# library(FLAREr)
 library(arrow)
 library(tidyverse)
 library(lubridate)
@@ -22,8 +21,6 @@ if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)){
 
 #### a) LER forecasts ####
 # The LER foreacsts are produced within the FLARE-LER workflow
-# These workflows append generate warning and stop if forecasts
-readline(prompt="These downloads will append to existing. Press [enter] to continue or delete files to redownload")
 
 # Read in the raw forecasts from s3 bucket
 s3_ler <- arrow::s3_bucket(bucket = "forecasts/ler_ms2/parquet",
@@ -32,88 +29,106 @@ s3_ler <- arrow::s3_bucket(bucket = "forecasts/ler_ms2/parquet",
 
 ds_ler <- arrow::open_dataset(s3_ler) 
 
-ler_parquet_files <- ds_ler$files[which(is.na(str_match(ds_ler$files, "GLM/")))]
+# ler_parquet_files <- ds_ler$files[which(is.na(str_match(ds_ler$files, "GLM/")))]
 
-if (!exists('.forecasts/')) {
+if (!dir.exists('./forecasts/')) {
   dir.create('./forecasts/')
 }
 
-for (i in 1:length(ler_parquet_files)) {
-  file_use <-  ler_parquet_files[i]
-  
-  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-  
-  forecast <- ds_ler |> 
-    filter(reference_date == date_use &
-             model_id == model_use) %>%
-    dplyr::collect()
-  
-  # test <- bind_rows(test, forecast)
-  data.table::fwrite(forecast, './forecasts/ler_v2_forecast.csv.gz', append = T)
-  message(i)
-  
-}
+ds_ler |>
+  dplyr::filter(model_id == 'GOTM') |>
+  dplyr::collect() |>
+  dplyr::group_by(model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts/forecast.parquet')
+
+ds_ler |>
+  dplyr::filter(model_id == 'GLM') |>
+  dplyr::collect() |>
+  dplyr::group_by(model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts/forecast.parquet')
+
+ds_ler |>
+  dplyr::filter(model_id == 'Simstrat') |>
+  dplyr::collect() |>
+  dplyr::group_by(model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts/forecast.parquet')
+
+# for (i in 1:length(ler_parquet_files)) {
+#   file_use <-  ler_parquet_files[i]
+#   
+#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+#   
+#   forecast <- ds_ler |> 
+#     filter(reference_date == date_use &
+#              model_id == model_use) %>%
+#     dplyr::collect()
+#   
+#   # test <- bind_rows(test, forecast)
+#   data.table::fwrite(forecast, './forecasts/ler_v2_forecast.csv.gz', append = T)
+#   message(i)
+#   
+# }
 
 # GLM forecasts
-GLM_v2_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GLM_2/")))]
-
-for (i in 1:length(GLM_v2_parquet_files)) {
-  file_use <-  GLM_v2_parquet_files[i]
-  
-  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-  
-  forecast <- ds_ler |> 
-    filter(reference_date == date_use &
-             model_id == model_use) %>%
-    dplyr::collect()
-  
-  # test <- bind_rows(test, forecast)
-  data.table::fwrite(forecast, './forecasts/GLM_v2_forecast.csv.gz', append = T)
-  message(i)
-  
-}
-
-# GOTM forecasts
-GOTM_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GOTM/")))]
-
-for (i in 1:length(GOTM_parquet_files)) {
-  file_use <-  GOTM_parquet_files[i]
-  
-  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-  
-  forecast <- ds_ler |> 
-    filter(reference_date == date_use &
-             model_id == model_use) %>%
-    dplyr::collect()
-  
-  # test <- bind_rows(test, forecast)
-  data.table::fwrite(forecast, './forecasts/GOTM_forecast.csv.gz', append = T)
-  message(i)
-  
-}
-
-# Simstrat forecasts
-Simstrat_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "Simstrat/")))]
-
-for (i in 1:length(Simstrat_parquet_files)) {
-  file_use <-  Simstrat_parquet_files[i]
-  
-  model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
-  date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
-  
-  forecast <- ds_ler |> 
-    filter(reference_date == date_use &
-             model_id == model_use) %>%
-    dplyr::collect()
-  
-  # test <- bind_rows(test, forecast)
-  data.table::fwrite(forecast, './forecasts/Simstrat_forecast.csv.gz', append = T)
-  message(i)
-  
-}
+# GLM_v2_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GLM_2/")))]
+# 
+# for (i in 1:length(GLM_v2_parquet_files)) {
+#   file_use <-  GLM_v2_parquet_files[i]
+#   
+#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+#   
+#   forecast <- ds_ler |> 
+#     filter(reference_date == date_use &
+#              model_id == model_use) %>%
+#     dplyr::collect()
+#   
+#   # test <- bind_rows(test, forecast)
+#   data.table::fwrite(forecast, './forecasts/GLM_v2_forecast.csv.gz', append = T)
+#   message(i)
+#   
+# }
+# 
+# # GOTM forecasts
+# GOTM_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "GOTM/")))]
+# 
+# for (i in 1:length(GOTM_parquet_files)) {
+#   file_use <-  GOTM_parquet_files[i]
+#   
+#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+#   
+#   forecast <- ds_ler |> 
+#     filter(reference_date == date_use &
+#              model_id == model_use) %>%
+#     dplyr::collect()
+#   
+#   # test <- bind_rows(test, forecast)
+#   data.table::fwrite(forecast, './forecasts/GOTM_forecast.csv.gz', append = T)
+#   message(i)
+#   
+# }
+# 
+# # Simstrat forecasts
+# Simstrat_parquet_files <- ds_ler$files[which(!is.na(str_match(ds_ler$files, "Simstrat/")))]
+# 
+# for (i in 1:length(Simstrat_parquet_files)) {
+#   file_use <-  Simstrat_parquet_files[i]
+#   
+#   model_use <- str_match(file_use, "model_id=\\s*(.*?)\\s*/")[2]
+#   date_use <- str_match(file_use, "reference_date=\\s*(.*?)\\s*/")[2]
+#   
+#   forecast <- ds_ler |> 
+#     filter(reference_date == date_use &
+#              model_id == model_use) %>%
+#     dplyr::collect()
+#   
+#   # test <- bind_rows(test, forecast)
+#   data.table::fwrite(forecast, './forecasts/Simstrat_forecast.csv.gz', append = T)
+#   message(i)
+#   
+# }
 
 
 #### b) Baseline forecasts ####
@@ -165,15 +180,16 @@ forecast.RW  <- function(start, h= 15, depth_use) {
              prediction = .sim,
              parameter = .rep) %>%
       as_tibble() %>% 
-      mutate(reference_datetime = start,
+      mutate(reference_datetime = as.character(format(start,
+                                                      '%Y-%m-%d %H:%M:%S')),
              # Add in the additional columns needed to score the forecast (like the FLARE output)
              site_id = 'fcre',
              variable = 'temperature',
-             family = 'ensemble'#,
-             # forecast = 0,
-             # variable_type = 'state',
-             # pub_time = Sys.time()
-             ) 
+             family = 'ensemble',
+             forecast = 0,
+             variable_type = 'state',
+             pub_time = Sys.time()
+      ) 
     
     message('RW forecast for ', start, ' at ', depth_use, ' m')
     return(RW_forecast)
@@ -249,8 +265,8 @@ forecast.clim <- function(targets = targets, start, h=14) {
     clim_uncertainty$sd[i] <- round(sd(residuals(lm(yr1~yr2, for_lm))), 2)
     
   }
-    
-    # Combine with the point forecast (DOY mean) with uncertainty
+  
+  # Combine with the point forecast (DOY mean) with uncertainty
   clim_forecast <- clim_uncertainty %>%
     full_join(clim_forecast, ., by='depth') %>%
     mutate(reference_datetime = start) %>%
@@ -280,7 +296,8 @@ create.ensemble <- function(climatology, times = 256) {
                                 mean = climatology$prediction, 
                                 sd= climatology$sd)) %>%
     mutate(datetime = climatology$datetime, 
-           reference_datetime = climatology$reference_datetime,
+           reference_datetime = as.character(format(climatology$reference_datetime,
+                                                    '%Y-%m-%d %H:%M:%S')),
            depth = climatology$depth)
 }
 
@@ -304,14 +321,14 @@ forecasts <- ls(pattern = '_forecast')
 for (i in 1:length(forecasts)) {
   
   if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
-    data.table::fwrite(get(forecasts[i]), paste0('../forecasts/',        
-                                        forecasts[i],
-                                        '.csv.gz'))
+    get(forecasts[i])|>
+      dplyr::group_by(model_id, reference_datetime) |>
+      arrow::write_dataset(path = '../forecasts/forecast.parquet')
     
   } else {
-    data.table::fwrite(get(forecasts[i]), paste0('./forecasts/',
-                                        forecasts[i],
-                                        '.csv.gz'))
+    get(forecasts[i])|>
+      dplyr::group_by(model_id, reference_datetime) |>
+      arrow::write_dataset(path = './forecasts/forecast.parquet') 
   }
   message(forecasts[i],' written')
 }
