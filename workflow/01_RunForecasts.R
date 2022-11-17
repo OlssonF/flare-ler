@@ -74,7 +74,7 @@ forecast_dates <- seq.Date(as.Date(first_date),as.Date(last_date), 7)
 # data frame with all depth and start_date combinations to be forecast
 forecast_vars <- expand.grid(start = forecast_dates, 
                              depth_use = unique(targets$depth)) %>%
-  mutate(h = 14)
+  mutate(h = 15)
 
 ##### Random walk #####
 forecast.RW  <- function(start, h= 15, depth_use) {
