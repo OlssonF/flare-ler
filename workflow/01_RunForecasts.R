@@ -60,7 +60,16 @@ targets <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targ
   filter(variable == 'temperature')
 
 # When to produce forecasts for
-forecast_dates <- seq.Date(as.Date('2020-10-25'),as.Date('2022-10-16'), 7)
+first_date <- ds_ler %>%
+  distinct(reference_datetime) %>%
+  summarise(min(reference_datetime)) %>%
+  pull()
+
+last_date <- ds_ler %>%
+  distinct(reference_datetime) %>%
+  summarise(max(reference_datetime)) %>%
+  pull()
+forecast_dates <- seq.Date(as.Date(first_date),as.Date(last_date), 7)
 
 # data frame with all depth and start_date combinations to be forecast
 forecast_vars <- expand.grid(start = forecast_dates, 
