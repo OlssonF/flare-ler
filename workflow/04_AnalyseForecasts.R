@@ -3,75 +3,39 @@
   # and 3 different ensembles (LER, LER+empirical, empirical). Each ensemble is also run with 3 different resampling methods
   # a) no resampling, b) equal model weighting with 200 members, rc) andom selection with 200 members
   # 14 forecasts in total
-
-library(GLM3r)
-library(FLAREr)
+# library(FLAREr)
 library(arrow)
 library(tidyverse)
 library(lubridate)
 
 #### a) read in scored forecasts ####
-score_files <- list.files('./scores/', full.names = T, pattern = '.parquet')
+scores_parquets <- arrow::open_dataset('./scores/site_id=fcre')
 
-for (i in 1:length(score_files)) {
-  name <- gsub('_forecast.parquet', '_scored', gsub('./scores/', '',score_files[i]))
+# extract a list of model_id from the parquet
+distinct_models <- scores_parquets |> distinct(model_id) |> pull()
 
-  score_file <- arrow::read_parquet(score_files[i]) %>%
-    mutate(model_id = gsub('_scored', '', name)) 
-  
-  assign(name, score_file)
-  
-  message('read in ', name)
-}
-
-# calculate shadowing time
-shadow_length <- function(df) {
-  df <- df %>%
-    filter(variable == 'temperature'&
-             horizon >= 0 &
-             !is.na(observation))
-  
-  shadow_rle <- rle(df$shadow) 
-  max_shadow <- shadow_rle$lengths[min(which(shadow_rle$values == T))]
-  shadow_length <- df$horizon[max_shadow]
-  return(shadow_length)
-}
-
-shadow_length_grouped <- function(df) {
-  df %>%
-    filter(variable == 'temperature'&
-             horizon >= 0 &
-             !is.na(observation)) %>%
-    mutate(shadow = ifelse(observation <= quantile97.5 &
-                             observation >= quantile02.5,
-                           T, F)) %>%
-    group_by(site_id, reference_datetime) %>%
-    summarise(shadow_length = shadow_length(df = .)) 
+for (i in 1:length(distinct_models)) {
+  scores <- scores_parquets |> 
+    filter(model_id == distinct_models[i],
+           horizon >= 0,
+           variable == 'temperature') |> 
+    collect()
+  assign(paste0(distinct_models[i], '_scored'), scores)
 }
 
 
-# calculate shadow length for all forecasts
-all_df <- ls(pattern = 'scored')
-
-for (i in all_df) {
-  temp <- shadow_length_grouped(get(i))
-  assign(x = gsub(pattern = '_scored', '_shadow', i), temp)
-}
-
-
-
-
-#extract list of diferent types of scored forecasts for comparisons
+#extract list of different types of scored forecasts for comparisons
 all_df <- ls(pattern = 'scored')
 empirical_forecasts <- all_df[c(grep('empirical', all_df),
                                 grep('climatology', all_df),
-                                grep('RW', all_df))][c(1,2,5,6)]
+                                grep('RW', all_df))]
 
-ensemble_forecasts <- all_df[grep('_256', all_df)]
 
 individual_forecasts <- all_df[-unique(c(grep('empirical', all_df),
                                          grep('ler', all_df)))]
 
+ensemble_forecasts <- all_df[unique(c(grep('empirical', all_df),
+                                       grep('ler', all_df)))]
 
 
 #===================================#
@@ -83,166 +47,161 @@ individual_scored <- bind_rows(mget(c(individual_forecasts)))
 
 
 
-example_forecast <- ensemble_scored %>%
+ensemble_scored %>%
   filter(variable == 'temperature',
          horizon >= 0,
-         site_id == 'fcre-8') %>%
+         depth == 1) %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
   geom_point(aes(y=observation)) +
   geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, 
                   fill =model_id, group = interaction(reference_datetime, model_id)), alpha = 0.2)+
   geom_line(aes(y=mean, colour = model_id, group = interaction(reference_datetime, model_id))) +
-  facet_wrap(model_id~site_id) +
-  coord_cartesian(xlim = ymd_hms(c("2021-05-01 00:00:00",
-                                   "2021-08-31 00:00:00")))
+  facet_wrap(model_id~depth) +
+  coord_cartesian(xlim = ymd_hms(c("2021-03-01 00:00:00",
+                                   "2021-10-31 00:00:00")))
 
-ggsave(example_forecast, filename = './plots/example_forecast3.png', 
-       width = 10, height = 10)
 
-example_forecast <- individual_scored %>%
+individual_scored %>%
   filter(variable == 'temperature',
          horizon >= 0,
-         site_id == 'fcre-1') %>%
+         depth == 1) %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
   geom_point(aes(y=observation)) +
   geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, 
                   fill =model_id, group = interaction(reference_datetime, model_id)), alpha = 0.2)+
   geom_line(aes(y=mean, colour = model_id, group = interaction(reference_datetime, model_id))) +
-  facet_wrap(model_id~site_id) +
-  coord_cartesian(xlim = ymd_hms(c("2021-05-01 00:00:00",
-                                   "2021-08-31 00:00:00")))
+  facet_wrap(model_id~depth) +
+  coord_cartesian(xlim = ymd_hms(c("2021-03-01 00:00:00",
+                                   "2021-10-31 00:00:00")))
 
 # Compare the different model ensemble scores
-ensemble_crps_p <- ensemble_scored %>%
+ensemble_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
   geom_line() +
-  facet_wrap(~site_id) +
+  facet_wrap(~depth) +
   scale_colour_viridis_d() +
   theme_bw()
 
-ensemble_logs_p <- ensemble_scored %>%
+ensemble_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
   geom_line() +
-  facet_wrap(~site_id) +
+  facet_wrap(~depth) +
   scale_colour_viridis_d() +
   theme_bw()
 
 
 
-all_crps_p <-all_scored %>%
+all_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         # site_id == 'fcre-1',
+         # depth == 'fcre-1',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
   geom_line() +
-  facet_wrap(~site_id)+
+  facet_wrap(~depth)+
   scale_colour_viridis_d() +
   theme_bw()
 
-all_logs_p <-all_scored %>%
+all_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         # site_id == 'fcre-1',
+         # depth == 'fcre-1',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
   geom_line() +
-  facet_wrap(~site_id)+
+  facet_wrap(~depth)+
   scale_colour_viridis_d() +
   theme_bw()
 
 
-empirical_crps_p <- all_empirical_scored %>%
+all_empirical_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         # site_id == 'fcre-1',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
   geom_line()+
-  facet_wrap(~site_id) +
+  facet_wrap(~depth) +
   scale_colour_viridis_d() +
   theme_bw()
 
-empirical_logs_p <- all_empirical_scored %>%
+all_empirical_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         # site_id == 'fcre-1',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
   geom_line()+
-  facet_wrap(~site_id) +
+  facet_wrap(~depth) +
   scale_colour_viridis_d() +
   theme_bw()
 
 
 
-individual_crps_p <- individual_scored %>%
+individual_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         # site_id == 'fcre-1',
+         # depth == 'fcre-1',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
   geom_line() +
-  facet_wrap(~site_id)+
+  facet_wrap(~depth)+
   scale_colour_viridis_d() +
   theme_bw()
 
-individual_logs_p <- individual_scored %>%
+individual_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         # site_id == 'fcre-1',
          horizon >= 0) %>%
-  group_by(horizon, model_id, site_id) %>%
+  group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
   geom_line() +
-  facet_wrap(~site_id)+
+  facet_wrap(~depth)+
   scale_colour_viridis_d() +
   theme_bw()
 
@@ -254,53 +213,79 @@ as_season <- function(datetime) {
          labels = c('spring', 'summer', 'autumn', 'winter'))
 }
 
-ensemble_season_p <- ensemble_scored %>%
-  mutate(season = as_season(datetime),
-         bias = mean - observation,
-         absolute_error = abs(bias),
-         sq_error = bias^2) %>% 
-  filter(variable == 'temperature',
-         horizon >= 0) %>%
-  group_by(horizon, model_id, site_id, season) %>%
-  summarise_if(is.numeric, mean, na.rm = T) %>%
-  na.omit() %>%
-  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
-  facet_grid(season~site_id)+
-  scale_colour_viridis_d() +
-  theme_bw()
-
-
-all_season_p <- all_empirical_scored %>%
-  mutate(season = as_season(datetime),
-         bias = mean - observation,
-         absolute_error = abs(bias),
-         sq_error = bias^2) %>% 
-  filter(variable == 'temperature',
-         # site_id == 'fcre-1',
-         horizon >= 0) %>%
-  group_by(horizon, model_id, site_id, season) %>%
-  summarise_if(is.numeric, mean, na.rm = T) %>%
-  na.omit() %>%
-  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
-  facet_grid(season~site_id)+
-  scale_colour_viridis_d() +
-  theme_bw()
-
-
-
-
-
-
-
-
-
-plots_save <- ls(pattern = '_p')
-
-for(i in 1:length(plots_save)) {
-  ggsave(get(plots_save[i]), 
-         filename = paste0('./plots/', gsub(pattern =  "_p", ".png", plots_save[i])),
-         width = 15, height = 7.5)
+which_year <- function(datetime) {
+  start <- ymd_hms(min(datetime))
+  start2 <- start + years(1)
+  
+  ifelse(between(ymd_hms(datetime), start, start2),
+                       1, 2)
 }
+
+individual_scored %>%
+  mutate(season = as_season(datetime),
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon >= 0) %>%
+  group_by(horizon, model_id, depth, season) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line() +
+  facet_grid(season~depth)+
+  scale_colour_viridis_d() +
+  theme_bw()
+
+
+all_empirical_scored %>%
+  mutate(season = as_season(datetime),
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon >= 0) %>%
+  group_by(horizon, model_id, depth, season) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line() +
+  facet_grid(season~depth)+
+  scale_colour_viridis_d() +
+  theme_bw()
+
+ensemble_scored %>%
+  mutate(season = as_season(datetime),
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon >= 0) %>%
+  group_by(horizon, model_id, depth, season) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line() +
+  facet_grid(season~depth)+
+  scale_colour_viridis_d() +
+  theme_bw()
+
+ensemble_scored %>%
+  mutate(year = which_year(reference_datetime),
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon >= 0,
+         depth == 1) %>%
+  group_by(horizon, model_id, depth, year) %>%
+  summarise_if(is.numeric, mean, na.rm = T) |> 
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line() +
+  facet_grid(year~depth)+
+  scale_colour_viridis_d() +
+  theme_bw()
+
+
 
