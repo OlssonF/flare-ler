@@ -17,7 +17,7 @@ distinct_models <- scores_parquets |> distinct(model_id) |> pull()
 for (i in 1:length(distinct_models)) {
   scores <- scores_parquets |> 
     filter(model_id == distinct_models[i],
-           horizon >= 0,
+           horizon > 0,
            variable == 'temperature') |> 
     collect()
   assign(paste0(distinct_models[i], '_scored'), scores)
@@ -49,7 +49,7 @@ individual_scored <- bind_rows(mget(c(individual_forecasts)))
 
 ensemble_scored %>%
   filter(variable == 'temperature',
-         horizon >= 0,
+         horizon > 0,
          depth == 1) %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
@@ -64,7 +64,7 @@ ensemble_scored %>%
 
 individual_scored %>%
   filter(variable == 'temperature',
-         horizon >= 0,
+         horizon > 0,
          depth == 1) %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
@@ -82,7 +82,7 @@ ensemble_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -97,7 +97,7 @@ ensemble_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -115,7 +115,7 @@ all_scored %>%
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          # depth == 'fcre-1',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -131,7 +131,7 @@ all_scored %>%
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          # depth == 'fcre-1',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -147,7 +147,7 @@ all_empirical_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -162,7 +162,7 @@ all_empirical_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -180,7 +180,7 @@ individual_scored %>%
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          # depth == 'fcre-1',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -195,7 +195,7 @@ individual_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -218,7 +218,7 @@ which_year <- function(datetime) {
   start2 <- start + years(1)
   
   ifelse(between(ymd_hms(datetime), start, start2),
-                       1, 2)
+                       'yr_1', 'yr_2')
 }
 
 individual_scored %>%
@@ -227,7 +227,7 @@ individual_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth, season) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -244,7 +244,7 @@ all_empirical_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth, season) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -260,7 +260,7 @@ ensemble_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0) %>%
+         horizon > 0) %>%
   group_by(horizon, model_id, depth, season) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -270,21 +270,21 @@ ensemble_scored %>%
   scale_colour_viridis_d() +
   theme_bw()
 
-ensemble_scored %>%
-  mutate(year = which_year(reference_datetime),
+all_scored %>%
+  mutate(season = as_season(datetime),
+         year = which_year(reference_datetime),
          bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon >= 0,
-         depth == 1) %>%
-  group_by(horizon, model_id, depth, year) %>%
+         horizon > 0, depth == 2) %>%
+  group_by(horizon, model_id, depth, season) %>%
   summarise_if(is.numeric, mean, na.rm = T) |> 
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
   geom_line() +
-  facet_grid(year~depth)+
-  scale_colour_viridis_d() +
+  facet_grid(~season, scales = 'free')+
+  # scale_colour_viridis_d() +
   theme_bw()
 
 
