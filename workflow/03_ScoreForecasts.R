@@ -20,10 +20,11 @@ if (!dir.exists('./scores/')) {
 
 
 #### c) Score forecasts ####
-# Open th dataset of forecast parquets to be scored
+# Open the dataset of forecast parquets to be scored
 forecast_parquets <- './forecasts/site_id=fcre'
 forecast_s3 <- arrow::SubTreeFileSystem$create(forecast_parquets)
 open_parquets <- arrow::open_dataset(forecast_s3) 
+
 
 # vector of unique model_ids
 models <- open_parquets |>
@@ -57,3 +58,39 @@ for (i in 1:nrow(model_refdates)) {
   
 } 
 #=============================#
+
+# write the ensemble and baseline scores to s3 bucket
+# Set s3 environment variables
+Sys.unsetenv("AWS_DEFAULT_REGION")
+Sys.unsetenv("AWS_S3_ENDPOINT")
+Sys.setenv("AWS_EC2_METADATA_DISABLED"="TRUE")
+Sys.setenv('USE_HTTPS' = TRUE)
+
+
+output_directory <- arrow::s3_bucket(bucket = "scores/ler_ms2/parquet",
+                                     endpoint_override =  "s3.flare-forecast.org")
+
+# Only write the ensemble and baseline scores to S3 bucket
+# local score files
+scores_parquets <- arrow::open_dataset('./scores/site_id=fcre')
+
+# extract a list of model_id from the parquet
+new_models <- c('RW', 'climatology', 'ler', 'empirical_ler', 'empirical')
+new_scores <- scores_parquets |> 
+  distinct(model_id) |> 
+  filter(model_id %in% new_models) |> 
+  pull() 
+
+# write the new scores to the S3 bucket
+for (i in 1:length(new_scores)) {
+  df <- scores_parquets |> 
+    filter(model_id == new_scores[i]) |> 
+    mutate(site_id = 'fcre') |> 
+    collect()
+  
+  arrow::write_dataset(df, path = output_directory, 
+                       partitioning = c("site_id","model_id","reference_datetime"))
+  message(new_scores[i], ' scores written to S3')
+}
+
+
