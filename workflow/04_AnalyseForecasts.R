@@ -93,24 +93,75 @@ df_comb <- all_scored %>%
 shadowing <- purrr::pmap_dfr(df_comb, shadow_length)
 
 shadowing %>% 
-  filter(model_id %in% c('empirical', 'empirical_ler', 'ler')) |> 
+  filter(model_id %in% gsub('_scored', '', process_forecasts)) |> 
   mutate(season = as_season(reference_datetime)) %>%
   group_by(depth, model_id, season) %>% 
   summarise(sd_st = sd(shadow_time),
             shadow_time=mean(shadow_time)) %>%
-  ggplot(.,aes(fill=model_id, y=shadow_time, x=as.factor(depth))) + 
+  ggplot(.,aes(fill=model_id, 
+               y=shadow_time, 
+               x= factor(depth, levels = sort(unique(shadowing$depth), decreasing = T)))) + 
   geom_col(position = 'dodge') + 
   # geom_errorbar(aes(ymin=shadow_time-sd_st, 
   #                   ymax=shadow_time+sd_st, group = as.factor(model_id)), 
   #               width=0.4, alpha=0.5, size=0.5, position = position_dodge(.9)) +
-  facet_wrap(~season) +
-  scale_fill_manual(values = cols) +
+  facet_wrap(~season, nrow = 1) +
+  scale_fill_manual(values = cols, limits = gsub('_scored', '', process_forecasts)) +
   theme_bw() +
+  coord_flip()+
+  labs(x= 'depth (m)') +
   theme(panel.grid = element_blank())
 #===================================#
 
+# How good are the confidence intervals?
+# 90% of points should fall within a 90% confidence interval.
+# How many points are within the confidence intervals for each depth/horizon
+all_scored %>%
+  filter(horizon > 0, horizon < 15) %>% 
+  na.omit() %>% 
+  mutate(shadow = ifelse(observation <= quantile90 &
+                           observation >= quantile10, 
+                         T, F)) %>%
+  group_by(model_id, horizon, depth) %>%
+  summarise(n = n(),
+            inside = length(which(shadow == T)),
+            percent = (inside/n) * 100) %>%
+  ggplot(., aes(x=horizon, y= percent, colour = model_id)) +
+  geom_hline(yintercept = 80)+
+  geom_line() +
+  facet_wrap(~depth)  +
+  scale_colour_manual(values = cols)
 
+all_scored %>%
+  filter(horizon > 0, horizon < 15) %>% 
+  na.omit() %>% 
+  mutate(shadow = ifelse(observation <= quantile97.5 &
+                           observation >= quantile02.5, 
+                         T, F)) %>%
+  group_by(model_id, horizon, depth) %>%
+  summarise(n = n(),
+            inside = length(which(shadow == T)),
+            percent = (inside/n) * 100) %>%
+  ggplot(., aes(x=horizon, y= percent, colour = model_id)) +
+  geom_hline(yintercept = 95)+
+  geom_line(size = 0.8) +
+  facet_wrap(~depth)  +
+  theme_bw()+
+  scale_colour_manual(values = cols)
+  
 
+all_scored %>%
+  filter(horizon > 0, horizon < 15) %>% 
+  na.omit() %>% 
+  mutate(shadow = ifelse(observation <= quantile97.5 &
+                           observation >= quantile02.5, 
+                         T, F)) %>%
+  group_by(model_id, horizon, depth) %>%
+  summarise(n = n(),
+            inside = length(which(shadow == T)),
+            percent = (inside/n) * 100) %>%
+  filter(depth %in% c(1,8),
+         horizon %in% c(1,7,14))
 
 #### c) plot example forecasts ####
 ensemble_scored %>%
