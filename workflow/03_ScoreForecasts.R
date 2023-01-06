@@ -28,6 +28,7 @@ open_parquets <- arrow::open_dataset(forecast_s3)
 
 # vector of unique model_ids
 models <- open_parquets |>
+  filter(model_id != 'Simstrat_2') |> 
   distinct(model_id) |> 
   collect() |> 
   pull(model_id)
@@ -35,6 +36,7 @@ models <- open_parquets |>
 unique_reftime <- open_parquets |>
   distinct(reference_datetime) |> 
   collect() |> 
+  arrange(reference_datetime) |> 
   pull(reference_datetime)
 model_refdates <- expand.grid(model_id = models, reference_datetime = unique_reftime)
 
@@ -76,6 +78,20 @@ scores_parquets <- arrow::open_dataset('./scores/site_id=fcre')
 
 # extract a list of model_id from the parquet
 new_models <- c('RW', 'climatology', 'ler', 'empirical_ler', 'empirical')
+
+# which ref_datetimes
+first_date <- scores_parquets %>%
+  distinct(reference_datetime) %>%
+  summarise(min(reference_datetime)) %>%
+  pull()
+
+last_date <- scores_parquets %>%
+  distinct(reference_datetime) %>%
+  summarise(max(reference_datetime)) %>%
+  pull()
+
+forecast_dates <- paste0(seq.Date(as.Date(first_date),as.Date(last_date), 7), ' 00:00:00')
+
 new_scores <- scores_parquets |> 
   distinct(model_id) |> 
   filter(model_id %in% new_models) |> 
@@ -84,7 +100,8 @@ new_scores <- scores_parquets |>
 # write the new scores to the S3 bucket
 for (i in 1:length(new_scores)) {
   df <- scores_parquets |> 
-    filter(model_id == new_scores[i]) |> 
+    filter(model_id == new_scores[i],
+           reference_datetime %in% forecast_dates) |> 
     mutate(site_id = 'fcre') |> 
     collect()
   
