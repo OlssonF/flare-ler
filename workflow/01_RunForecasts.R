@@ -35,30 +35,6 @@ if (!dir.exists('./forecasts/')) {
   dir.create('./forecasts/')
 }
 
-ds_ler |>
-  dplyr::filter(model_id == 'GOTM') |>
-  dplyr::collect() |>
-  dplyr::group_by(site_id, model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts')
-
-ds_ler |>
-  dplyr::filter(model_id == 'GLM') |>
-  dplyr::collect() |>
-  dplyr::group_by(site_id, model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts')
-
-ds_ler |>
-  dplyr::filter(model_id == 'Simstrat') |>
-  dplyr::collect() |>
-  dplyr::group_by(site_id, model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts')
-
-
-#### b) Baseline forecasts ####
-# Targets data needed to produce baseline forecasts
-targets <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') %>%
-  filter(variable == 'temperature')
-
 # When to produce forecasts for
 first_date <- ds_ler %>%
   distinct(reference_datetime) %>%
@@ -69,10 +45,40 @@ last_date <- ds_ler %>%
   distinct(reference_datetime) %>%
   summarise(max(reference_datetime)) %>%
   pull()
-forecast_dates <- seq.Date(as.Date(first_date),as.Date(last_date), 7)
+
+forecast_dates <- paste0(seq.Date(as.Date(first_date),as.Date(last_date), 7), ' 00:00:00')
+
+ds_ler |>
+  dplyr::filter(model_id == 'GOTM',
+                reference_datetime %in% forecast_dates) |>
+  dplyr::collect() |>
+  dplyr::group_by(site_id, model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts')
+
+ds_ler |>
+  dplyr::filter(model_id == 'GLM',
+                reference_datetime %in% forecast_dates) |>
+  dplyr::collect() |>
+  dplyr::group_by(site_id, model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts')
+
+ds_ler |>
+  dplyr::filter(model_id == 'Simstrat',
+                reference_datetime %in% forecast_dates) |>
+  dplyr::collect() |>
+  dplyr::group_by(site_id, model_id, reference_datetime) |>
+  arrow::write_dataset(path = './forecasts')
+
+
+#### b) Baseline forecasts ####
+# Targets data needed to produce baseline forecasts
+targets <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') %>%
+  filter(variable == 'temperature')
+
+
 
 # data frame with all depth and start_date combinations to be forecast
-forecast_vars <- expand.grid(start = forecast_dates, 
+forecast_vars <- expand.grid(start = as_date(gsub(' 00:00:00', '',forecast_dates)), 
                              depth_use = unique(targets$depth)) %>%
   mutate(h = 15)
 
@@ -84,7 +90,7 @@ forecast.RW  <- function(start, h= 15, depth_use) {
     dplyr::filter(!is.na(observation) & depth == depth_use & datetime < start)
   
   if (nrow(forecast_starts) !=0) {
-    forecast_starts <- forecast_starts %>% 
+    forecast_starts <- forecast_starts %>%
       # Start the day after the most recent non-NA value
       dplyr::summarise(start_date = ymd(max(datetime) + lubridate::days(1))) %>% # Date
       dplyr::mutate(h = (start - start_date) + h) %>% # Horizon value
