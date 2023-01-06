@@ -10,18 +10,47 @@ library(lubridate)
 
 source('R/shadow_time.R')
 source('R/time_functions.R')
+source('R/stratified_period.R')
+
+cols <- c('RW' = "#BBDF27FF",
+          'climatology' =  "#43BF71FF",
+          'empirical' = "#21908CFF",
+          'GLM' = '#FCA50AFF',
+          'GOTM' = '#E65D30FF',
+          'Simstrat' = '#AE305CFF',
+          'ler' = '#6B186EFF',
+          'empirical_ler' = 'darkgrey')
+line_types <- c('ensemble' = "solid",
+                'individual' = 'dashed')
+
+strat_dates <- stratification_density(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+                       density_diff = 0.1)  %>% na.omit()
+
 #### a) read in scored forecasts ####
-scores_parquets <- arrow::open_dataset('./scores/site_id=fcre')
+# Can be read in from local file system or from S3 bucket
+local <- FALSE
+
+if (local == TRUE) {
+  scores_parquets <- arrow::open_dataset('./scores/site_id=fcre')
+} else {
+  s3_ler <- arrow::s3_bucket(bucket = "scores/ler_ms2/parquet",
+                             endpoint_override =  "s3.flare-forecast.org",
+                             anonymous = TRUE)
+  
+  scores_parquets <- arrow::open_dataset(s3_ler) 
+}
+
 
 # extract a list of model_id from the parquet
-distinct_models <- scores_parquets |> distinct(model_id) |> pull()
+distinct_models <- scores_parquets |> distinct(model_id) |> filter(model_id != 'Simstrat_2') |> pull()
 
 for (i in 1:length(distinct_models)) {
   scores <- scores_parquets |> 
     filter(model_id == distinct_models[i],
-           horizon > 0,
+           horizon < 15,
            variable == 'temperature') |> 
-    collect()
+    collect()|> 
+    mutate(model_id = factor(model_id, levels = names(cols))) 
   assign(paste0(distinct_models[i], '_scored'), scores)
 }
 
@@ -63,20 +92,81 @@ df_comb <- all_scored %>%
 # find the shadowing time for each forecast (1 reference_datetime, 1 depth, 1 model_id)
 shadowing <- purrr::pmap_dfr(df_comb, shadow_length)
 
-shadowing %>% group_by(depth, model_id) %>% 
-  filter(model_id %in% c('empirical', 'empirical_ler', 'ler')) |> 
+shadowing %>% 
+  filter(model_id %in% gsub('_scored', '', process_forecasts)) |> 
+  mutate(season = as_season(reference_datetime)) %>%
+  group_by(depth, model_id, season) %>% 
   summarise(sd_st = sd(shadow_time),
             shadow_time=mean(shadow_time)) %>%
-  ggplot(.,aes(fill=model_id, y=shadow_time, x=as.factor(depth))) + 
+  ggplot(.,aes(fill=model_id, 
+               y=shadow_time, 
+               x= factor(depth, levels = sort(unique(shadowing$depth), decreasing = T)))) + 
   geom_col(position = 'dodge') + 
-  geom_errorbar(aes(ymin=shadow_time-sd_st, 
-                    ymax=shadow_time+sd_st, group = as.factor(model_id)), 
-                width=0.4, alpha=0.5, size=0.5, position = position_dodge(.9))
+  # geom_errorbar(aes(ymin=shadow_time-sd_st, 
+  #                   ymax=shadow_time+sd_st, group = as.factor(model_id)), 
+  #               width=0.4, alpha=0.5, size=0.5, position = position_dodge(.9)) +
+  facet_wrap(~season, nrow = 1) +
+  scale_fill_manual(values = cols, limits = gsub('_scored', '', process_forecasts)) +
+  theme_bw() +
+  coord_flip()+
+  labs(x= 'depth (m)') +
+  theme(panel.grid = element_blank())
 #===================================#
+
+# How good are the confidence intervals?
+# 90% of points should fall within a 90% confidence interval.
+# How many points are within the confidence intervals for each depth/horizon
+all_scored %>%
+  filter(horizon > 0, horizon < 15) %>% 
+  na.omit() %>% 
+  mutate(shadow = ifelse(observation <= quantile90 &
+                           observation >= quantile10, 
+                         T, F)) %>%
+  group_by(model_id, horizon, depth) %>%
+  summarise(n = n(),
+            inside = length(which(shadow == T)),
+            percent = (inside/n) * 100) %>%
+  ggplot(., aes(x=horizon, y= percent, colour = model_id)) +
+  geom_hline(yintercept = 80)+
+  geom_line() +
+  facet_wrap(~depth)  +
+  scale_colour_manual(values = cols)
+
+all_scored %>%
+  filter(horizon > 0, horizon < 15) %>% 
+  na.omit() %>% 
+  mutate(shadow = ifelse(observation <= quantile97.5 &
+                           observation >= quantile02.5, 
+                         T, F)) %>%
+  group_by(model_id, horizon, depth) %>%
+  summarise(n = n(),
+            inside = length(which(shadow == T)),
+            percent = (inside/n) * 100) %>%
+  ggplot(., aes(x=horizon, y= percent, colour = model_id)) +
+  geom_hline(yintercept = 95)+
+  geom_line(size = 0.8) +
+  facet_wrap(~depth)  +
+  theme_bw()+
+  scale_colour_manual(values = cols)
+  
+
+all_scored %>%
+  filter(horizon > 0, horizon < 15) %>% 
+  na.omit() %>% 
+  mutate(shadow = ifelse(observation <= quantile97.5 &
+                           observation >= quantile02.5, 
+                         T, F)) %>%
+  group_by(model_id, horizon, depth) %>%
+  summarise(n = n(),
+            inside = length(which(shadow == T)),
+            percent = (inside/n) * 100) %>%
+  filter(depth %in% c(1,8),
+         horizon %in% c(1,7,14))
+
 #### c) plot example forecasts ####
 ensemble_scored %>%
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon < 15) %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
   geom_point(aes(y=observation)) +
@@ -90,7 +180,7 @@ ensemble_scored %>%
 
 individual_scored %>%
   filter(variable == 'temperature',
-         horizon > 0,
+         horizon < 15,
          depth == 1) %>%
   na.omit() %>%
   ggplot(., aes(x=datetime)) +
@@ -110,14 +200,14 @@ ensemble_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon < 15) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
+  geom_line(size = 0.9) +
   facet_wrap(~depth) +
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = unique(ensemble_scored$model_id)) +
   theme_bw()
 
 ensemble_scored %>%
@@ -125,32 +215,52 @@ ensemble_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon < 15) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
-  geom_line() +
+  geom_line(size = 0.9) +
   facet_wrap(~depth) +
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = unique(ensemble_scored$model_id)) +
   theme_bw()
 
 
+# comparison of scores at two depths
+ensemble_scored %>%
+  filter(variable == 'temperature' &
+         horizon < 15 &
+           depth %in% c(1, 8)) %>%
+  mutate(season = as_season(datetime)) %>%
+  group_by(horizon, model_id, depth, season) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  select(horizon, model_id, depth, crps, logs, season) %>%
+  pivot_longer(values_to = 'value', names_to = 'score', cols = c(crps, logs)) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= value, colour = model_id, linetype = as.factor(depth))) +
+  geom_line(size = 0.9) +
+  facet_grid(season~score) +
+  scale_colour_manual(values = cols, limits = unique(ensemble_scored$model_id)) +
+  scale_linetype_manual(values = c('twodash', 'longdash'), name = 'Depth (m)')+
+  theme_bw()
 
 all_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         # depth == 'fcre-1',
-         horizon > 0) %>%
+         model_id != 'Simstrat_2',
+         horizon <15) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
-  na.omit() %>%
+  na.omit() %>% 
+  mutate(class = ifelse(model_id %in% gsub('_scored', '', ensemble_forecasts),
+                        'ensemble', 'individual')) %>% 
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
+  geom_line(size = 0.9, aes(linetype = class)) +
   facet_wrap(~depth)+
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols) +
+  scale_linetype_manual(values = line_types) +
   theme_bw()
 
 all_scored %>%
@@ -158,15 +268,82 @@ all_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
+         model_id %in% c('ler', 'climatology', 'RW'),
+         horizon < 15) %>%
+  group_by(horizon, model_id, depth) %>%
+  summarise_if(is.numeric, mean, na.rm = T)  %>% 
+  mutate(class = ifelse(model_id %in% gsub('_scored', '', ensemble_forecasts),
+                        'ensemble', 'individual')) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id, linetype = class)) +
+  geom_line(size = 0.9) +
+  facet_wrap(~depth)+
+  scale_colour_manual(values = cols, limits = c('ler', 'climatology', 'RW')) +
+  scale_linetype_manual(values = line_types) +
+  theme_bw()
+
+
+all_scored %>%
+  mutate(bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2,
+         season = as_season(datetime)) %>% 
+  filter(variable == 'temperature',
+         model_id %in% c('ler', 'climatology', 'RW'),
+         horizon < 14,
+         depth %in% c(1,8)) %>%
+  group_by(horizon, model_id, depth, season) %>%
+  summarise_if(is.numeric, mean, na.rm = T)  %>% 
+  mutate(class = ifelse(model_id %in% gsub('_scored', '', ensemble_forecasts),
+                        'ensemble', 'individual')) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, linetype = class, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_grid(season~depth)+
+  scale_colour_manual(values = cols, limits = c('ler', 'climatology', 'RW')) +
+  theme_bw()
+
+
+all_scored %>%
+  mutate(bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2,
+         season = as_season(datetime)) %>% 
+  filter(variable == 'temperature',
+         model_id %in% c('ler', 'empirical_ler','climatology', 'RW'),
+         horizon < 14,
+         depth %in% c(1,8)) %>%
+  group_by(horizon, model_id, depth, season) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit()  %>% 
+  mutate(class = ifelse(model_id %in% gsub('_scored', '', ensemble_forecasts),
+                        'ensemble', 'individual')) %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id, linetype = class)) +
+  geom_line(size = 0.9) +
+  facet_grid(season~depth)+
+  scale_colour_manual(values = cols, limits = c('ler', 'empirical_ler','climatology', 'RW')) +
+  scale_linetype_manual(values = line_types) +
+  theme_bw()
+
+
+
+all_scored %>%
+  mutate(bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
          # depth == 'fcre-1',
-         horizon > 0) %>%
+         horizon < 15) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
-  na.omit() %>%
-  ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
-  geom_line() +
+  na.omit() %>% 
+  mutate(class = ifelse(model_id %in% gsub('_scored', '', ensemble_forecasts),
+                        'ensemble', 'individual')) %>%
+  ggplot(., aes(x=horizon, y= logs, colour = model_id, linetype = class)) +
+  geom_line(size = 0.9) +
   facet_wrap(~depth)+
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = unique(all_scored$model_id)) +
+  scale_linetype_manual(values = line_types) +
   theme_bw()
 
 
@@ -175,48 +352,66 @@ all_empirical_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon < 15) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
-  na.omit() %>%
-  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line()+
+  na.omit()  %>% 
+  mutate(class = ifelse(model_id %in% gsub('_scored', '', ensemble_forecasts),
+                        'ensemble', 'individual')) %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id, linetype = class)) +
+  geom_line(size = 0.9)+
   facet_wrap(~depth) +
-  scale_colour_viridis_d() +
+  scale_color_manual(values = cols, limits = unique(all_empirical_scored$model_id)) +
+  scale_linetype_manual(values = line_types) +
   theme_bw()
 
 all_process_scored %>%
-  filter(model_id != 'Simstrat') %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon <15) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line()+
+  geom_line(size = 0.9)+
   facet_wrap(~depth) +
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = c('GLM', 'GOTM', 'Simstrat', 'ler')) +
   theme_bw()
+
 
 all_empirical_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon < 15, model_id != 'empirical_ler') %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
-  ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
-  geom_line()+
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9)+
   facet_wrap(~depth) +
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = levels(all_empirical_scored$model_id)[1:3]) +
   theme_bw()
 
 
+ensemble_scored %>%
+  mutate(bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         # depth == 'fcre-1',
+         horizon < 15) %>%
+  group_by(horizon, model_id, depth) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_wrap(~depth)+
+  scale_colour_manual(values = cols, limits = unique(ensemble_scored$model_id)) +
+  theme_bw()
 
 individual_scored %>%
   mutate(bias = mean - observation,
@@ -224,14 +419,14 @@ individual_scored %>%
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          # depth == 'fcre-1',
-         horizon > 0) %>%
+         horizon < 15, model_id != 'Simstrat_2') %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
+  geom_line(size = 0.9) +
   facet_wrap(~depth)+
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = levels(individual_scored$model_id)[c(1:2,4:6)]) +
   theme_bw()
 
 individual_scored %>%
@@ -239,84 +434,180 @@ individual_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon < 15, 
+         model_id != 'Simstrat_2') %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= logs, colour = model_id)) +
-  geom_line() +
+  geom_line(size = 0.9) +
   facet_wrap(~depth)+
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = levels(individual_scored$model_id)[c(1:2,4:6)]) +
   theme_bw()
 
 
 # seasonal analysis
 
 individual_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 0, 15), 
+         depth == 1,
+         model_id != 'Simstrat_2') %>% 
+  mutate(season = as_season(datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime = datetime),
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>%
+  group_by(horizon, model_id, year, strat) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_grid(strat~year)+
+  scale_colour_manual(values = cols, limits = levels(individual_scored$model_id)[c(1:2,4:6)]) +
+  theme_bw() + labs(title = 'surface (1m)')
+
+individual_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 0, 15), 
+         depth == 8,
+         model_id != 'Simstrat_2') %>% 
+  mutate(season = as_season(datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime = datetime),
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>%
+  group_by(horizon, model_id, year, strat) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_grid(strat~year)+
+  scale_colour_manual(values = cols, limits = levels(individual_scored$model_id)[c(1:2,4:6)]) +
+  theme_bw() +
+  labs(title = 'bottom (8m)')
+
+
+
+all_scored %>%
   mutate(season = as_season(datetime),
          bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
+         horizon < 15, 
+         depth %in% c(1,8),
+         model_id %in% c('RW', 'climatology', 'empirical', 'ler', 'empirical_ler')) %>%
   group_by(horizon, model_id, depth, season) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
+  geom_line(size = 0.9) +
   facet_grid(season~depth)+
-  scale_colour_viridis_d() +
-  theme_bw()
-
-
-all_empirical_scored %>%
-  mutate(season = as_season(datetime),
-         bias = mean - observation,
-         absolute_error = abs(bias),
-         sq_error = bias^2) %>% 
-  filter(variable == 'temperature',
-         horizon > 0) %>%
-  group_by(horizon, model_id, depth, season) %>%
-  summarise_if(is.numeric, mean, na.rm = T) %>%
-  na.omit() %>%
-  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
-  facet_grid(season~depth)+
-  scale_colour_viridis_d() +
+  scale_colour_manual(values = cols, limits = c('RW', 'climatology', 'empirical', 'ler', 'empirical_ler')) +
   theme_bw()
 
 ensemble_scored %>%
   mutate(season = as_season(datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime), 
          bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0) %>%
-  group_by(horizon, model_id, depth, season) %>%
+         horizon < 15, horizon > 0, 
+         depth %in% c(1,8)) %>%
+  group_by(horizon, model_id, depth, strat) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
-  facet_grid(season~depth)+
-  scale_colour_viridis_d() +
+  geom_line(size = 0.9) +
+  facet_grid(strat~depth)+
+  scale_colour_manual(values = cols, limits = unique(ensemble_scored$model_id)) +
   theme_bw()
 
-all_scored %>%
+ensemble_scored %>%
   mutate(season = as_season(datetime),
-         year = which_year(reference_datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime), 
          bias = mean - observation,
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon > 0, depth == 2) %>%
-  group_by(horizon, model_id, depth, season) %>%
+         horizon < 15, horizon > 0, 
+         depth %in% c(1)) %>%
+  group_by(horizon, model_id, year, strat) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_grid(strat~year)+
+  scale_colour_manual(values = cols, limits = unique(ensemble_scored$model_id)) +
+  theme_bw() + labs(title = 'surface (1m)')
+
+ensemble_scored %>%
+  mutate(season = as_season(datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime), 
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon < 15, horizon > 0, 
+         depth %in% c(8)) %>%
+  group_by(horizon, model_id, year, strat) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_grid(strat~year)+
+  scale_colour_manual(values = cols, limits = unique(ensemble_scored$model_id)) +
+  theme_bw() +
+  labs(title = 'bottom (8m)')
+
+all_scored %>%
+  mutate(season = as_season(datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime), 
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon < 15, 
+         horizon > 0,
+         depth == 1, 
+         model_id != 'Simstrat_2') %>%
+  group_by(horizon, model_id, year, strat) %>%
   summarise_if(is.numeric, mean, na.rm = T) |> 
   na.omit() %>%
   ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
-  geom_line() +
-  facet_grid(~season, scales = 'free')+
-  # scale_colour_viridis_d() +
-  theme_bw()
+  geom_line(size = 0.9) +
+  facet_grid(strat~year, scales = 'free')+
+  scale_colour_manual(values = cols, limits = levels(all_scored$model_id)) +
+  theme_bw() + labs(title = 'surface (1m)')
+
+all_scored %>%
+  mutate(season = as_season(datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime), 
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon < 15, 
+         horizon > 0,
+         depth == 8, 
+         model_id != 'Simstrat_2') %>%
+  group_by(horizon, model_id, year, strat) %>%
+  summarise_if(is.numeric, mean, na.rm = T) |> 
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_grid(strat~year, scales = 'free')+
+  scale_colour_manual(values = cols, limits = levels(all_scored$model_id)) +
+  theme_bw() + labs(title = 'bottom (8m)')
 
 
 
