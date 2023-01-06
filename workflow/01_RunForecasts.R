@@ -224,7 +224,7 @@ forecast.clim <- function(targets = targets, start, h=14) {
 }
 
 # get the climatology forecast for each date
-climatology <- forecast_dates %>%
+climatology <- as_date(gsub(' 00:00:00', '',forecast_dates)) |> 
   map_dfr( ~ forecast.clim(targets = targets, start = .x)) 
 
 # Function to create an ensemble from the mean and standard deviation
