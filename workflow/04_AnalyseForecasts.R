@@ -42,12 +42,25 @@ if (local == TRUE) {
 
 
 # extract a list of model_id from the parquet
-distinct_models <- scores_parquets |> distinct(model_id) |> filter(model_id != 'Simstrat_2') |> pull()
+distinct_models <- scores_parquets |> 
+  distinct(model_id) |> 
+  filter(model_id != 'Simstrat_2') |> pull()
+
+# only weekly forecasts
+first_date <- as_datetime("2020-10-25 00:00:00")
+
+last_date <- as_datetime("2022-10-23 00:00:00")
+
+forecast_dates <- paste0(seq.Date(as.Date(first_date),as.Date(last_date), 7), ' 00:00:00')
+
+
 
 for (i in 1:length(distinct_models)) {
   scores <- scores_parquets |> 
     filter(model_id == distinct_models[i],
+           reference_datetime %in% forecast_dates,
            horizon < 15,
+           horizon > 0,
            variable == 'temperature') |> 
     collect()|> 
     mutate(model_id = factor(model_id, levels = names(cols))) 
@@ -200,7 +213,8 @@ ensemble_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon < 15) %>%
+         horizon < 15,
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -215,7 +229,8 @@ ensemble_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon < 15) %>%
+         horizon < 15,
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -250,7 +265,8 @@ all_scored %>%
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          model_id != 'Simstrat_2',
-         horizon <15) %>%
+         horizon <15,
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>% 
@@ -269,7 +285,8 @@ all_scored %>%
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
          model_id %in% c('ler', 'climatology', 'RW'),
-         horizon < 15) %>%
+         horizon < 15,
+         horizon > 0) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T)  %>% 
   mutate(class = ifelse(model_id %in% gsub('_scored', '', ensemble_forecasts),
@@ -291,6 +308,7 @@ all_scored %>%
   filter(variable == 'temperature',
          model_id %in% c('ler', 'climatology', 'RW'),
          horizon < 14,
+         horizon > 0,
          depth %in% c(1,8)) %>%
   group_by(horizon, model_id, depth, season) %>%
   summarise_if(is.numeric, mean, na.rm = T)  %>% 
@@ -370,7 +388,25 @@ all_process_scored %>%
          absolute_error = abs(bias),
          sq_error = bias^2) %>% 
   filter(variable == 'temperature',
-         horizon <15) %>%
+         horizon <15,
+         horizon > 0) %>%
+  group_by(horizon, model_id, depth) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9)+
+  facet_wrap(~depth) +
+  scale_colour_manual(values = cols, limits = c('GLM', 'GOTM', 'Simstrat', 'ler')) +
+  theme_bw()
+
+all_process_scored %>%
+  mutate(bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>% 
+  filter(variable == 'temperature',
+         horizon <15,
+         horizon > 0, 
+         depth %in% c(1,8)) %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
@@ -490,6 +526,25 @@ individual_scored %>%
   labs(title = 'bottom (8m)')
 
 
+all_process_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 1, 14), 
+         depth %in% c(1,8)) %>% 
+  mutate(season = as_season(datetime),
+         strat = is_strat(datetime, strat_dates),
+         year = which_year(datetime = datetime),
+         bias = mean - observation,
+         absolute_error = abs(bias),
+         sq_error = bias^2) %>%
+  group_by(horizon, model_id, depth, strat) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= crps, colour = model_id)) +
+  geom_line(size = 0.9) +
+  facet_grid(strat~depth)+
+  scale_colour_manual(values = cols, limits = levels(all_process_scored$model_id)[c(4:7)]) +
+  scale_x_continuous(breaks = c(1,7,14)) +
+  theme_bw()
 
 all_scored %>%
   mutate(season = as_season(datetime),
