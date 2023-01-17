@@ -12,13 +12,13 @@ source('R/shadow_time.R')
 source('R/time_functions.R')
 source('R/stratified_period.R')
 
-cols <- c('RW' = "#BBDF27FF",
-          'climatology' =  "#43BF71FF",
-          'empirical' = "#21908CFF",
-          'GLM' = '#FCA50AFF',
-          'GOTM' = '#E65D30FF',
-          'Simstrat' = '#AE305CFF',
-          'ler' = '#6B186EFF',
+cols <- c('RW' = "#455BCDFF",
+          'climatology' =  "#30B1F4FF",
+          'empirical' = "#2BEFA0FF",
+          'GLM' = "#A2FC3CFF", #'#FCA50AFF',
+          'GOTM' =  "#F0CC3AFF", #'#E65D30FF',
+          'Simstrat' = "#F9731DFF", #'#AE305CFF',
+          'ler' =  "#C42503FF", #'#6B186EFF',
           'empirical_ler' = 'darkgrey')
 line_types <- c('ensemble' = "solid",
                 'individual' = 'dashed')
