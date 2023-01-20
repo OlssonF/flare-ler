@@ -1,6 +1,6 @@
 
 # function to identify the maximum initial shadow length
-shadow_rle <- function(col = shadow) {
+shadow_rle <- function(shadow) {
   
   rle_result <- rle(shadow == T)
   
@@ -16,16 +16,16 @@ shadow_rle <- function(col = shadow) {
 }
 
 
-calc_shadow_time <- function(df, targets_df, var = 'temperature', sd = 0.1, p = c(0.975, 0.025)) {
+calc_shadow_time <- function(forecast_df, targets_df, var = 'temperature', sd = 0.1, p = c(0.975, 0.025)) {
   
   # mutate the forecast df into the right format
-  df1 <- df %>%
+  df1 <- forecast_df %>%
     select(datetime, reference_datetime, depth, site_id,
            variable, parameter, prediction, model_id) |> 
     filter(variable == var, 
            datetime > as_datetime(reference_datetime)) |> 
     arrange(parameter, datetime) |> 
-    mutate(site_id = paste0(site_id, '_', depth)) |> 
+    # mutate(site_id = paste0(site_id, '_', depth)) |> 
     left_join(targets_file, by = c("datetime", "depth", "site_id", "variable")) |> 
     na.omit(observation) |> 
     mutate(obs_upper = qnorm(mean = observation, sd = sd, p = max(p)),
