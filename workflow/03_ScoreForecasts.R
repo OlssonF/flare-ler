@@ -137,7 +137,8 @@ for (i in 1:nrow(model_refdates)) {
     mutate(site_id = 'fcre') |>
     collect()
   
-  shadow_time <- calc_shadow_time(forecast_df, targets_df = targets_file, var = 'temperature')
+  shadow_time <- calc_shadow_time(forecast_df, targets_df = targets_file, var = 'temperature',
+                                  sd = 0.1, p = c(0.975, 0.025))
   
   if (is.null(shadow_time) == FALSE) {
     
