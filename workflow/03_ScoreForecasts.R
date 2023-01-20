@@ -13,13 +13,13 @@ if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
 } 
 
 source('./R/scoring_function_arrow.R')
-
+source('./R/shadow_time.R')
 if (!dir.exists('./scores/')) {
   dir.create('./scores/')
 }
 
 
-#### c) Score forecasts ####
+#### Read in forecasts ####
 # Open the dataset of forecast parquets to be scored
 forecast_parquets <- './forecasts/site_id=fcre'
 forecast_s3 <- arrow::SubTreeFileSystem$create(forecast_parquets)
@@ -40,6 +40,9 @@ unique_reftime <- open_parquets |>
   pull(reference_datetime)
 model_refdates <- expand.grid(model_id = models, reference_datetime = unique_reftime)
 
+#==================================#
+
+#### Regular scoring function ####
 for (i in 1:nrow(model_refdates)) {
   # subset the model and reference datetime
   forecast_df <- open_parquets|>
@@ -54,6 +57,8 @@ for (i in 1:nrow(model_refdates)) {
                                   forecast_df = forecast_df,
                                   local_directory = './scores')
     message(i, "/", nrow(model_refdates), " forecasts scored")
+    
+    
   } else {
     message('no forecast for ', model_refdates$model_id[i], ' ', model_refdates$reference_datetime[i] )
   }
@@ -111,3 +116,40 @@ for (i in 1:length(new_scores)) {
 }
 
 
+#===================================#
+
+### Shadowing time ####
+# Calculating the shadowing time uses 1 forecast each reference_Datetime-model combination independently
+# read in the targets
+targets_file <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') |> 
+  mutate(site_id = paste0(site_id, '_', depth))
+
+
+# takes one forecast file (one model, one reference_datetime)
+shadow_summary <- NULL
+
+# Loop through each reference_datetime-model_id combination
+for (i in 1:nrow(model_refdates)) {
+  
+  forecast_df <- open_parquets|>
+    dplyr::filter(model_id == model_refdates$model_id[i], 
+                  reference_datetime == model_refdates$reference_datetime[i]) |>
+    mutate(site_id = 'fcre') |>
+    collect()
+  
+  shadow_time <- calc_shadow_time(forecast_df, targets_df = targets_file, var = 'temperature')
+  
+  if (is.null(shadow_time) == FALSE) {
+    
+    shadow_time <- shadow_time |> 
+      mutate(model_id = model_refdates$model_id[i], 
+             reference_datetime = model_refdates$reference_datetime[i])
+    
+    shadow_summary <- bind_rows(shadow_time, shadow_summary)
+    # message('shadow time calculated for ', model_refdates$model_id[i], ' ', model_refdates$reference_datetime[i])
+  }
+  
+  
+}
+
+#=============================================================#
