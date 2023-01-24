@@ -5,6 +5,7 @@
 library(arrow)
 library(tidyverse)
 library(lubridate)
+options(dplyr.summarise.inform = FALSE)
 
 rm(list = ls())
 
@@ -121,36 +122,30 @@ for (i in 1:length(new_scores)) {
 ### Shadowing time ####
 # Calculating the shadowing time uses 1 forecast each reference_Datetime-model combination independently
 # read in the targets
-targets_file <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') |> 
+targets_df <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') |> 
   mutate(site_id = paste0(site_id, '_', depth))
 
 
-# takes one forecast file (one model, one reference_datetime)
-shadow_summary <- NULL
-
-# Loop through each reference_datetime-model_id combination
-for (i in 1:nrow(model_refdates)) {
-  
-  forecast_df <- open_parquets|>
-    dplyr::filter(model_id == model_refdates$model_id[i], 
-                  reference_datetime == model_refdates$reference_datetime[i]) |>
-    mutate(site_id = 'fcre') |>
-    collect()
-  
-  shadow_time <- calc_shadow_time(forecast_df, targets_df = targets_file, var = 'temperature',
-                                  sd = 0.2, p = c(0.975, 0.025))
-  
-  if (is.null(shadow_time) == FALSE) {
+# # takes one forecast file (one model, one reference_datetime)
+shadow_summary  <- purrr::map2_dfr(
+  .x = model_refdates$model_id,
+  .y = model_refdates$reference_datetime,
+  .f = function(mod, ref_datetime) {
+    message(mod, ' ',ref_datetime)
     
-    shadow_time <- shadow_time |> 
-      mutate(model_id = model_refdates$model_id[i], 
-             reference_datetime = model_refdates$reference_datetime[i])
+    forecast_df <- open_parquets|>
+      dplyr::filter(model_id == mod, 
+                    reference_datetime == ref_datetime) |>
+      mutate(site_id = 'fcre') |>
+      collect()
     
-    shadow_summary <- bind_rows(shadow_time, shadow_summary)
-    # message('shadow time calculated for ', model_refdates$model_id[i], ' ', model_refdates$reference_datetime[i])
+    shadow_time <- calc_shadow_time(forecast_df, targets_df, var = 'temperature',
+                                    sd = 0.1, p = c(0.975, 0.025))  
+    if (!is.null(shadow_time)) {
+      shadow_time |> mutate(model_id = mod,
+             reference_datetime = ref_datetime)
+    }
+      
   }
-  
-  
-}
-
+)
 #=============================================================#
