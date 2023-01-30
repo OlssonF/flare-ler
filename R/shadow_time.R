@@ -1,4 +1,6 @@
 
+# Function 1 - ensemble shadow (real)
+# do the ensemble members follow the dynamics of the observations
 # function to identify the maximum initial shadow length
 shadow_rle <- function(shadow) {
   
@@ -49,4 +51,45 @@ calc_shadow_time <- function(forecast_df, targets_df, var = 'temperature', sd = 
     return(final_df)
   }
   
+}
+
+# Function 2: statistical shadowing####
+
+# df = name of the df where the scores are
+# modl = model_id
+# dep = depth
+# ref_datetime = reference_datetime
+
+#  function only takes one forecast at a time
+
+stat_shadow_length <- function(df, mod, dep, ref_datetime) {
+  df_use <- get(df) %>%
+    filter(reference_datetime == ref_datetime & depth == dep &
+             model_id == mod) |> 
+    ungroup() %>%
+    filter(!is.na(observation)) %>%
+    arrange(datetime) %>%
+    
+    # is the observation between the upper and lower quantiles
+    mutate(shadow = ifelse(observation <= quantile97.5 &
+                             observation >= quantile02.5, 
+                           T, F))
+  
+  shadow_rle <- rle(df_use$shadow) 
+  
+  
+  if (shadow_rle$values[1] == TRUE) {
+    max_shadow <- shadow_rle$lengths[min(which(shadow_rle$values == T))]
+    shadow_out <- data.frame(model_id = mod,
+                             depth = dep, 
+                             reference_datetime = ref_datetime,
+                             shadow_time = df_use$horizon[max_shadow])
+  } else {
+    shadow_out <- data.frame(model_id = mod,
+                             depth = dep,
+                             reference_datetime = ref_datetime,
+                             shadow_time = 0)
+  }
+  message(paste(ref_datetime, dep, mod))
+  return(shadow_out)
 }
