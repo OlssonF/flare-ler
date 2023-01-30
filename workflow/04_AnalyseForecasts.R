@@ -26,7 +26,7 @@ line_types <- c('ensemble' = "solid",
 strat_dates <- stratification_density(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
                        density_diff = 0.1)  %>% na.omit()
 
-#### a) read in scored forecasts ####
+# read in scored forecasts ###
 # Can be read in from local file system or from S3 bucket
 local <- FALSE
 
@@ -85,7 +85,7 @@ ensemble_forecasts <- all_df[unique(c(grep('empirical', all_df),
 
 
 #===================================#
-#### b) combine forecast scores ####
+# combine forecast scores ###
 ensemble_scored <- bind_rows(mget(ensemble_forecasts))
 all_scored <- bind_rows(mget(c(individual_forecasts, ensemble_forecasts)))
 all_empirical_scored <- bind_rows(mget(c(empirical_forecasts)))
@@ -93,7 +93,52 @@ individual_scored <- bind_rows(mget(c(individual_forecasts)))
 all_process_scored <- bind_rows(mget(c(process_forecasts)))
 #===================================#
 
-# Calculate shadowing time
+# Observations ####
+all_scored |> 
+  na.omit() |> 
+  select(datetime, observation, depth) |> 
+  distinct(datetime, observation, depth) |> 
+  ggplot(aes(x=datetime, y= observation, colour = as.factor(depth))) +
+  geom_line() +
+  theme_bw() +
+  scale_y_continuous(name = 'Water temperature (°C)') +
+  scale_x_datetime(name = 'Date', date_breaks = '3 months', date_labels = '%b %Y') +
+  scale_colour_viridis_d(name = 'Depth (m)', option = "H", begin = 0.9, end = 0.1)
+
+for_interp <- expand.grid(datetime = seq(min(all_scored$datetime),
+                                        max(all_scored$datetime), 'day'),
+                         depth = seq(min(all_scored$depth), 
+                                     max(all_scored$depth),
+                                     by = .01))
+
+
+all_scored |> 
+  na.omit() |> 
+  select(datetime, observation, depth) |> 
+  distinct(datetime, observation, depth) |>
+  group_by(datetime) |> 
+  mutate(observation = imputeTS::na_interpolation(observation, option = "linear")) |> 
+  # full_join(for_interp) |> 
+  # ungroup() |> 
+  # group_by(datetime) |> 
+  # mutate(observation = imputeTS::na_interpolation(observation, option = "linear", )) |>  
+  ggplot(aes(x=datetime, y = as.numeric(depth))) +
+  geom_tile(aes(fill = observation)) +
+  scale_y_reverse(expand = c(0,0)) +
+  theme_bw(base_size = 11) +
+  scale_x_datetime(expand = c(0,0), 
+                   date_breaks = "1 month", 
+                   date_labels = "%b") +
+  scale_fill_gradientn(name = "Water temperature\n(°C)",
+                       limits = c(-1, 30),
+                       colours = c("#313695", "#4575b4", "#74add1",
+                                   "#abd9e9", "#e0f3f8", "#ffffbf", "#fee090",
+                                   "#fdae61", "#f46d43", "#d73027", "#a50026" )) +
+  labs(x= "Date", y = "Depth (m)", subtitle = "Modelled") +
+  theme(axis.text.x = element_text(hjust = -0.4))
+
+#### Calculate "shadowing time" ####
+
 df_comb <- all_scored %>%
   filter(!is.na(observation)) %>%
   distinct(model_id, reference_datetime, depth) %>%
@@ -103,29 +148,30 @@ df_comb <- all_scored %>%
          dep = depth)
 
 # find the shadowing time for each forecast (1 reference_datetime, 1 depth, 1 model_id)
-shadowing <- purrr::pmap_dfr(df_comb, shadow_length)
+statistical <- purrr::pmap_dfr(df_comb, stat_shadow_length)
 
-shadowing %>% 
-  filter(model_id %in% gsub('_scored', '', process_forecasts)) |> 
-  mutate(season = as_season(reference_datetime)) %>%
-  group_by(depth, model_id, season) %>% 
+statistical %>% 
+  # filter(model_id %in% gsub('_scored', '', process_forecasts)) |> 
+  # mutate(season = as_season(reference_datetime)) %>%
+  group_by(depth, model_id) %>% 
   summarise(sd_st = sd(shadow_time),
             shadow_time=mean(shadow_time)) %>%
   ggplot(.,aes(fill=model_id, 
                y=shadow_time, 
-               x= factor(depth, levels = sort(unique(shadowing$depth), decreasing = T)))) + 
-  geom_col(position = 'dodge') + 
+               x= factor(depth, levels = unique(shadowing$depth)))) + 
+  geom_col(position = 'dodge')+
   # geom_errorbar(aes(ymin=shadow_time-sd_st, 
   #                   ymax=shadow_time+sd_st, group = as.factor(model_id)), 
   #               width=0.4, alpha=0.5, size=0.5, position = position_dodge(.9)) +
-  facet_wrap(~season, nrow = 1) +
-  scale_fill_manual(values = cols, limits = gsub('_scored', '', process_forecasts)) +
+  scale_fill_manual(values = cols, limits = unique(shadowing$model_id)) +
+  scale_y_continuous(expand = c(0,0), breaks = c(2,4,6,8,10,12,14)) +
   theme_bw() +
-  coord_flip()+
+  # coord_flip()+
   labs(x= 'depth (m)') +
-  theme(panel.grid = element_blank())
+  theme(panel.grid.minor  = element_blank())
 #===================================#
 
+# Confidence intervals ####
 # How good are the confidence intervals?
 # 90% of points should fall within a 90% confidence interval.
 # How many points are within the confidence intervals for each depth/horizon
@@ -175,8 +221,9 @@ all_scored %>%
             percent = (inside/n) * 100) %>%
   filter(depth %in% c(1,8),
          horizon %in% c(1,7,14))
+#===================================#
 
-#### c) plot example forecasts ####
+#### d) plot example forecasts ####
 ensemble_scored %>%
   filter(variable == 'temperature',
          horizon < 15) %>%
@@ -207,7 +254,7 @@ individual_scored %>%
 
 ##====================================#
 
-#### d) plot scores ####
+#### e) plot scores ####
 ensemble_scored %>%
   mutate(bias = mean - observation,
          absolute_error = abs(bias),
