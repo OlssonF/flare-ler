@@ -2,13 +2,24 @@
 # Function 1 - ensemble shadow (real)
 # do the ensemble members follow the dynamics of the observations
 # function to identify the maximum initial shadow length
-shadow_rle <- function(shadow) {
+shadow_rle <- function(shadow, miss1 = F) {
   
   rle_result <- rle(shadow == T)
   
+  # when the first day is shadowed...
   if(rle_result$values[1] == TRUE) {
     
-    shadow_length <- rle_result$lengths[1]
+    # when the rle has 3 different values (Tn, F1, Tn)
+    if (length(rle_result$lengths) >= 3) {
+    
+      # set a argument so that you can miss 1 and come back and still be counted
+      if (miss1 == T & rle_result$lengths[2] == 1) {
+        shadow_length <- sum(rle_result$lengths[1:3])
+      } 
+      # is it is more thna one day missed just take the first T
+    } else {
+      shadow_length <- rle_result$lengths[1]
+    }
     
   } else {
     shadow_length <- 0
@@ -18,7 +29,11 @@ shadow_rle <- function(shadow) {
 }
 
 
-calc_shadow_time <- function(forecast_df, targets_df, var = 'temperature', sd = 0.1, p = c(0.975, 0.025)) {
+calc_shadow_time <- function(forecast_df, targets_df, 
+                             var = 'temperature', 
+                             sd = 0.1, 
+                             p = c(0.975, 0.025), 
+                             miss1 = F) {
   
   # mutate the forecast df into the right format
   df1 <- forecast_df %>%
@@ -40,7 +55,7 @@ calc_shadow_time <- function(forecast_df, targets_df, var = 'temperature', sd = 
     df2 <- df1 |> 
       dplyr::ungroup() |> 
       dplyr::group_by(depth, parameter) |> 
-      dplyr::summarise(shadow_length = shadow_rle(shadow = shadow)) 
+      dplyr::summarise(shadow_length = shadow_rle(shadow = shadow, miss1 = miss1)) 
     
     # summarise this to figure out the longest shadow length for each depth
     final_df <- df2 %>%
