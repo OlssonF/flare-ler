@@ -72,26 +72,12 @@ for (i in 1:length(distinct_models)) {
 
 #extract list of different types of scored forecasts for comparisons
 all_df <- ls(pattern = 'scored')
-# empirical_forecasts <- all_df[c(grep('empirical', all_df),
-#                                 grep('climatology', all_df),
-#                                 grep('RW', all_df))]
-# process_forecasts <- all_df[-c(grep('empirical', all_df),
-#                                grep('climatology', all_df),
-#                                grep('RW', all_df))]
-# 
-# individual_forecasts <- all_df[-unique(c(grep('empirical', all_df),
-#                                          grep('ler', all_df)))]
-# 
-# ensemble_forecasts <- all_df[unique(c(grep('empirical', all_df),
-#                                       grep('ler', all_df)))]
+
 
 # combine forecast scores ###
 all_scored <- bind_rows(mget(all_df))
 
-# ensemble_scored <- bind_rows(mget(ensemble_forecasts))
-# all_empirical_scored <- bind_rows(mget(c(empirical_forecasts)))
-# individual_scored <- bind_rows(mget(c(individual_forecasts)))
-# all_process_scored <- bind_rows(mget(c(process_forecasts)))
+
 #===================================#
 
 # recode the model_id's to the paper names
@@ -104,7 +90,7 @@ all_scored <-  all_scored |>
                                               "ler" = "LER")))
 
 ### PLOT 2 - observations ####
-all_scored |> 
+plot2 <- all_scored |> 
   na.omit() |> 
   select(datetime, observation, depth) |> 
   distinct(datetime, observation, depth) |> 
@@ -120,11 +106,13 @@ all_scored |>
   scale_y_continuous(name = 'Water temperature (°C)') +
   scale_x_datetime(name = 'Date', date_breaks = '3 months', date_labels = '%b %Y') +
   scale_colour_viridis_d(name = 'Depth (m)', option = "H", begin = 0.9, end = 0.1)
+
+ggsave(plot2, filename = file.path('plots', 'plot2.png'), height = 10, width = 18, units = 'cm')
 #=============================#
 
 
 ### PLOT 3 - PM fits ====
-all_scored %>%
+plot3 <- all_scored %>%
   filter(variable == 'temperature',
          horizon %in%  c(1, 7, 14),
          depth %in% c(1,8),
@@ -153,12 +141,14 @@ all_scored %>%
         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), 
         axis.title.y.right = element_text(vjust = 1.2),
         axis.title.x.top = element_text(vjust = 1.2))
+
+ggsave(plot3, filename = file.path('plots', 'plot3.png'), height = 12, width = 18, units = 'cm')
 #=======================================#
 
 
 ### PLOT 4 - LER v process model IGN ####
 # LER vs process models, split by stratification
-all_scored %>%
+plot4 <- all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
          depth %in% c(1,8), model_id %in% process_models) %>% 
@@ -173,6 +163,8 @@ all_scored %>%
   scale_x_continuous(breaks = c(1,7,14)) +
   labs(y = 'Ignorance score') +
   theme_bw()
+
+ggsave(plot4, filename = file.path('plots', 'plot4.png'), height = 12, width = 15, units = 'cm')
 
 ####================================#
 
@@ -239,9 +231,10 @@ logs_plot <- all_scored %>%
   guides(colour = guide_legend(nrow = 3))
 
 
-ggpubr::ggarrange(bias_plot, variance_plot, logs_plot, 
-                  ncol  = 3, common.legend = T, align = "hv") 
+plot5 <- ggpubr::ggarrange(bias_plot, variance_plot, logs_plot, 
+                           ncol  = 3, common.legend = T, align = "hv") 
 
+ggsave(plot5, filename = file.path('plots', 'plot5.png'), height = 10, width = 15, units = 'cm')
 
 #===============================================#
 
@@ -257,7 +250,7 @@ shadow_summary <- read_csv('shadow_summary.csv') |>
                                               "ler" = "LER"))) |> 
   filter(model_id != 'empirical')
 
-shadow_summary |>
+plot6 <- shadow_summary |>
   group_by(depth, model_id) |> 
   summarise(mean_shadow = mean(shadow_length, na.rm = T)) |> 
   ggplot(aes(x=mean_shadow, y=depth)) +
@@ -267,6 +260,7 @@ shadow_summary |>
   scale_x_continuous(breaks = c(2,4,6,8,10,12,14)) +
   theme_bw() +
   labs(x= 'Mean shadowing length (days)', y = 'Depth (m)')
+ggsave(plot6, filename = file.path('plots', 'plot6.png'), height = 6, width = 10, units = 'cm')
 
 shadow_summary |>
   group_by(model_id) |> 
