@@ -26,7 +26,7 @@ calc_shadow_time <- function(forecast_df, targets_df, var = 'temperature', sd = 
            variable, parameter, prediction, model_id) |> 
     filter(variable == var, 
            datetime > as_datetime(reference_datetime)) |> 
-    arrange(parameter, datetime) |> 
+    # arrange(parameter, datetime) |> 
     mutate(site_id = paste0(site_id, '_', depth)) |> 
     left_join(targets_df, by = c("datetime", "depth", "site_id", "variable")) |> 
     na.omit(observation) |> 
