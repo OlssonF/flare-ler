@@ -131,6 +131,7 @@ shadow_summary  <- purrr::map2_dfr(
   .x = model_refdates$model_id,
   .y = model_refdates$reference_datetime,
   .f = function(mod, ref_datetime) {
+    
     message(mod, ' ',ref_datetime)
     
     forecast_df <- open_parquets|>
@@ -140,12 +141,59 @@ shadow_summary  <- purrr::map2_dfr(
       collect()
     
     shadow_time <- calc_shadow_time(forecast_df, targets_df, var = 'temperature',
-                                    sd = 0.1, p = c(0.975, 0.025))  
+                                    sd = 0.2, p = c(0.975, 0.025))  
     if (!is.null(shadow_time)) {
       shadow_time |> mutate(model_id = mod,
-             reference_datetime = ref_datetime)
+                            reference_datetime = ref_datetime)
     }
       
   }
 )
+
+write_csv(shadow_summary, file = 'shadow_summary.csv')
 #=============================================================#
+
+# choose 1 to have a go at plotting
+
+example_refdate <- '2020-10-25 00:00:00' # '2021-06-20 00:00:00'
+mod <- 'RW'
+dep <- 8 # 1
+
+test_forecast <- open_parquets|>
+  dplyr::filter(depth == dep,
+                model_id == mod, 
+                reference_datetime == example_refdate) |>
+  mutate(site_id = 'fcre') |>
+  collect()
+
+test_shadow <- test_forecast %>%
+  select(datetime, reference_datetime, depth, site_id,
+         variable, parameter, prediction, model_id) |> 
+  filter(variable == 'temperature', 
+         datetime >= as_datetime(reference_datetime)) |> 
+  mutate(site_id = paste0(site_id, '_', depth)) |> 
+  left_join(targets_df, by = c("datetime", "depth", "site_id", "variable")) |> 
+  na.omit(observation) |> 
+  mutate(obs_upper = qnorm(mean = observation, sd = 0.2, p = max(0.975)),
+         obs_lower = qnorm(mean = observation, sd = 0.2, p = min(0.025)),
+         shadow = ifelse(prediction <= obs_upper &
+                           prediction >= obs_lower,
+                         T, F))
+
+p <- test_shadow  |> 
+  filter(shadow == F) |> 
+  group_by(parameter) |> 
+  summarise(stop = min(datetime))
+
+p2 <- p |> 
+  full_join(test_shadow, by = 'parameter', multiple = 'all') |> 
+  filter(datetime <= stop) |> 
+  mutate(best = ifelse(stop == max(stop), T, F))
+
+ggplot(p2, aes(x=datetime, y=prediction, group = parameter, colour = best)) +
+  geom_point(aes(y=observation), colour = 'grey') +
+  geom_errorbar(aes(ymax = obs_upper, ymin = obs_lower), colour = 'grey') +
+  labs(title = paste('depth = ', dep, mod, example_refdate)) +
+  geom_line(alpha = 0.5)  +
+  scale_colour_discrete(guide = 'none')
+
