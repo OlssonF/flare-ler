@@ -1,8 +1,4 @@
-# Script 3 in workflow to analyse the scored forecasts
-# The forecasts include 3 process-based models within LER, 2 empirical models (random walk and climatology),
-  # and 3 different ensembles (LER, LER+empirical, empirical). Each ensemble is also run with 3 different resampling methods
-  # a) no resampling, b) equal model weighting with 200 members, rc) andom selection with 200 members
-  # 14 forecasts in total
+# Exploratory visualisations only
 # library(FLAREr)
 library(arrow)
 library(tidyverse)
@@ -12,16 +8,29 @@ source('R/shadow_time.R')
 source('R/time_functions.R')
 source('R/stratified_period.R')
 
-cols <- c('RW' = "#455BCDFF",
+all_scored_recode <-  all_scored |> 
+  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="full_ensemble",
+                                              "GLM"="PM_1",
+                                              "GOTM"='PM_2',
+                                              "Simstrat"='PM_3',
+                                              "RW" = "persistence",
+                                              "ler" = "LER")))
+
+
+models1 <-  c('full_ensemble', 'persistence', 'climatology', 'PM_1', 'PM_2', 'PM_3')
+models2 <- c('full_ensemble', 'persistence', 'climatology', 'ler')
+models3 <- c('LER', 'PM_1', 'PM_2', 'PM_3')
+
+
+cols <- c('persistence' = "#455BCDFF",
           'climatology' =  "#30B1F4FF",
           'empirical' = "#2BEFA0FF",
-          'GLM' = "#A2FC3CFF", #'#FCA50AFF',
-          'GOTM' =  "#F0CC3AFF", #'#E65D30FF',
-          'Simstrat' = "#F9731DFF", #'#AE305CFF',
-          'ler' =  "#C42503FF", #'#6B186EFF',
-          'empirical_ler' = 'darkgrey')
-line_types <- c('ensemble' = "solid",
-                'individual' = 'dashed')
+          'PM_1' = "#A2FC3CFF", #'#FCA50AFF',
+          'PM_2' =  "#F0CC3AFF", #'#E65D30FF',
+          'PM_3' = "#F9731DFF", #'#AE305CFF',
+          'LER' =  "#C42503FF", #'#6B186EFF',
+          'full_ensemble' = 'darkgrey')
+
 
 strat_dates <- stratification_density(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
                        density_diff = 0.1)  %>% na.omit()
@@ -98,8 +107,14 @@ all_scored |>
   na.omit() |> 
   select(datetime, observation, depth) |> 
   distinct(datetime, observation, depth) |> 
-  ggplot(aes(x=datetime, y= observation, colour = as.factor(depth))) +
-  geom_line() +
+  ggplot() +
+  annotate("rect", ymin = -Inf, ymax = Inf, 
+                xmin = as_datetime(strat_dates$start[3]),
+                xmax = as_datetime(strat_dates$end[3]), alpha = 0.2) +
+  annotate("rect", ymin = -Inf, ymax = Inf, 
+           xmin = as_datetime(strat_dates$start[4]),
+           xmax = as_datetime(strat_dates$end[4]), alpha = 0.2) +
+  geom_line(aes(x=datetime, y= observation, colour = as.factor(depth))) +
   theme_bw() +
   scale_y_continuous(name = 'Water temperature (°C)') +
   scale_x_datetime(name = 'Date', date_breaks = '3 months', date_labels = '%b %Y') +
