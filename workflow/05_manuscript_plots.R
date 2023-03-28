@@ -290,7 +290,7 @@ shadow_summary <- read_csv('shadow_summary.csv') |>
                                               "ler" = "LER"))) |> 
   filter(model_id != 'empirical')
 
-# plot6 <- 
+plot6 <- 
   shadow_summary |>
   mutate(strat = is_strat(reference_datetime, strat_dates)) %>%
   group_by(depth, model_id, strat) |> 
@@ -309,7 +309,7 @@ shadow_summary <- read_csv('shadow_summary.csv') |>
   labs(x= 'Mean shadowing length (days)', y = 'Depth (m)') +
   theme(panel.spacing = unit(1, "lines"))
 
-ggsave(plot6, filename = file.path('plots', 'plot6.png'), height = 6, width = 15, units = 'cm')
+ggsave(plot6, filename = file.path('plots', 'plot6.png'), height = 7, width = 15, units = 'cm')
 
 shadow_summary |>
   group_by(model_id) |> 
