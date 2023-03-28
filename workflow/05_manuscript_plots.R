@@ -51,8 +51,13 @@ shapes <- c('climatology' = 15,
                'LER' =  17, 
                'full_ensemble' = 17)
 
-strat_dates <- stratification_density(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+strat_dates <- calc_strat_dates(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
                                       density_diff = 0.1)  %>% na.omit()
+inverse_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+                                        density_diff = 0.1, inverse = T)  %>% na.omit()
+strat_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+                              density_diff = 0.1, inverse = F)  %>% na.omit()
+
 #=========================================
 
 
@@ -104,9 +109,6 @@ all_df <- ls(pattern = 'scored')
 # combine forecast scores ###
 all_scored <- bind_rows(mget(all_df))
 
-
-#===================================#
-
 # recode the model_id's to the paper names
 all_scored <-  all_scored |> 
   mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="full_ensemble",
@@ -115,6 +117,7 @@ all_scored <-  all_scored |>
                                               "Simstrat"='PM_3',
                                               "RW" = "persistence",
                                               "ler" = "LER")))
+#=======================================#
 
 ### PLOT 2 - observations ####
 plot2 <-
@@ -136,6 +139,7 @@ plot2 <-
   scale_colour_viridis_d(name = 'Depth (m)', option = "H", begin = 0.9, end = 0.1)
 
 ggsave(plot2, filename = file.path('plots', 'plot2.png'), height = 10, width = 18, units = 'cm')
+
 #=============================#
 
 
