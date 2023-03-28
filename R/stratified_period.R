@@ -2,7 +2,7 @@
 library(tidyverse)
 library(rLakeAnalyzer)
 
-stratification_density <- function(density_diff, targets) {
+calc_strat_dates <- function(density_diff, targets) {
   targets_density<- read_csv(targets, show_col_types = F, progress = F) %>%
     filter(variable == 'temperature') %>% 
     # use a density difference between top and bottom to define stratification
@@ -69,5 +69,55 @@ stratification_density <- function(density_diff, targets) {
   return(strat)
 }
 
-
+calc_strat_freq <- function(targets, density_diff, inverse = F) {
+  
+  if (inverse == T) {
+    targets_density <- read_csv(targets, show_col_types = F, progress = F) %>%
+      filter(variable == 'temperature') %>% 
+      # use a density difference between top and bottom to define stratification
+      mutate(density = rLakeAnalyzer::water.density(observation)) %>%
+      pivot_wider(names_from = depth, 
+                  values_from = c(density, observation), 
+                  id_cols = c(datetime, site_id)) %>%
+      mutate(strat = ifelse((density_8 - density_1) > density_diff &
+                                  observation_1 < observation_8,
+                                1, 0),
+             strat = imputeTS::na_interpolation(strat, option = 'linear'))
+  }
+  if (inverse == F) {
+    targets_density <- read_csv(targets, show_col_types = F, progress = F) %>%
+      filter(variable == 'temperature') %>% 
+      # use a density difference between top and bottom to define stratification
+      mutate(density = rLakeAnalyzer::water.density(observation)) %>%
+      pivot_wider(names_from = depth, 
+                  values_from = c(density, observation), 
+                  id_cols = c(datetime, site_id)) %>%
+      mutate(strat = ifelse(density_8.75 - density_0 > density_diff &
+                                  observation_0 > observation_8.75,
+                                1, 0),
+             strat = imputeTS::na_interpolation(strat, option = 'linear'))  
+  }
+  
+  strat <- data.frame(year = unique(year(targets_density$datetime)), 
+                      freq = NA)
+  
+  # Loop through each year
+  for (i in 1:nrow(strat)) {
+    year_use <- strat$year[i]
+    
+    temp.dens <- targets_density %>%
+      mutate(year = year(datetime)) %>% 
+      filter(year == year_use)
+    
+    # Give a warming if not a whole year
+    if (nrow(temp.dens) >= 365) {
+      strat$freq[i] <- length(which(temp.dens$strat == 1))
+    } else {
+      strat$freq[i] <- length(which(temp.dens$strat == 1))
+      message('Warning! Only ', nrow(temp.dens), ' days in ', year_use, ' obs data')
+    }
+    
+  }
+  return(strat)
+}
 
