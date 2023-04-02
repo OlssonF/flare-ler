@@ -164,7 +164,7 @@ absbias_plot <-
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y = 'Bias (°C)',
+  labs(y = 'Absolute Bias (°C)',
        x = 'Horizon (days)') +
   theme_bw() +
   guides(colour =guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
@@ -208,44 +208,11 @@ logs_plot <- all_scored %>%
 
 
 plot3 <- ggpubr::ggarrange(absbias_plot, variance_plot, logs_plot, 
-                           ncol  = 3, common.legend = T, align = "hv") 
+                           ncol  = 3, common.legend = T, align = "hv", labels = 'auto') 
 
 ggsave(plot3, filename = file.path('plots', 'plot3.png'), height = 10, width = 21, units = 'cm')
 
-### PLOT 4 - LER v process model IGN ####
-# LER vs process models, split by stratification
-plot4 <-
-  all_scored %>%
-  filter(variable == 'temperature',
-         between(horizon, 1, 14), 
-         depth %in% c(1,8), 
-         model_id %in% individual_models) %>% 
-  mutate(strat = is_strat(datetime, strat_dates)) %>%
-  group_by(horizon, model_id, depth, strat) %>%
-  summarise_if(is.numeric, mean, na.rm = T) %>%
-  na.omit() %>%
-  ggplot(., aes(x=horizon, y= logs, colour = model_id, linetype = model_id)) +
-  geom_line(linewidth = 0.9) +
-  facet_grid(depth~strat, labeller = labeller(.rows = label_both, .cols = time_periods)) +
-  scale_colour_manual(values = cols, 
-                      limits = individual_models,
-                      name = 'Model') +
-  scale_linetype_manual(values = linetypes, 
-                        limits = individual_models,
-                        name = 'Model') +
-  scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y = 'Ignorance score', x = 'Horizon') +
-  theme_bw()
-
-ggsave(plot4, filename = file.path('plots', 'plot4.png'), height = 12, width = 15, units = 'cm')
-
-####================================#
-
-
-#===============================================#
-
-
-### PLOT 5 - MONEY PLOT ======
+### PLOT 4 - MONEY PLOT ======
 
 # bias
 bias_plot <- 
@@ -311,10 +278,43 @@ logs_plot <- all_scored %>%
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
 
 
-plot5 <- ggpubr::ggarrange(bias_plot, variance_plot, logs_plot, 
+plot4 <- ggpubr::ggarrange(bias_plot, variance_plot, logs_plot, 
                            ncol  = 3, common.legend = T, align = "hv") 
 
-ggsave(plot5, filename = file.path('plots', 'plot5.png'), height = 10, width = 15, units = 'cm')
+ggsave(plot4, filename = file.path('plots', 'plot4.png'), height = 10, width = 15, units = 'cm')
+
+#===============================================#
+
+
+### PLOT 5 - LER v process model IGN ####
+# LER vs process models, split by stratification
+plot5 <-
+  all_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 1, 14), 
+         depth %in% c(1,8), 
+         model_id %in% all_models) %>% 
+  mutate(strat = is_strat(datetime, strat_dates)) %>%
+  group_by(horizon, model_id, depth, strat) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= logs, colour = model_id, linetype = model_id)) +
+  geom_line(linewidth = 0.9) +
+  facet_grid(depth~strat, labeller = labeller(.rows = label_both, .cols = time_periods)) +
+  scale_colour_manual(values = cols, 
+                      limits = all_models,
+                      name = 'Model') +
+  scale_linetype_manual(values = linetypes, 
+                        limits = all_models,
+                        name = 'Model') +
+  scale_x_continuous(breaks = c(1,7,14)) +
+  labs(y = 'Ignorance score', x = 'Horizon') +
+  theme_bw()
+
+ggsave(plot5, filename = file.path('plots', 'plot5.png'), height = 12, width = 15, units = 'cm')
+
+####================================#
+
 
 #===============================================#
 
@@ -322,12 +322,12 @@ ggsave(plot5, filename = file.path('plots', 'plot5.png'), height = 10, width = 1
 
 ### PLOT 6 - Shadowing time plot ======
 shadow_summary <- read_csv('shadow_summary.csv') |> 
-  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="full_ensemble",
+  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full_Ensemble",
                                               "GLM"="PM_1",
                                               "GOTM"='PM_2',
                                               "Simstrat"='PM_3',
                                               "RW" = "persistence",
-                                              "ler" = "LER"))) |> 
+                                              "ler" = "PM_Ensemble"))) |> 
   filter(model_id != 'empirical')
 
 plot6 <- 
@@ -362,8 +362,7 @@ shadow_summary |>
 
 ### Supplementary information.... ======
 ## PM fits 
-plot3 <- 
-  all_scored %>%
+SI_fig <- all_scored %>%
   filter(variable == 'temperature',
          horizon %in%  c(1, 7, 14),
          depth %in% c(1,8),
@@ -393,5 +392,4 @@ plot3 <-
         axis.title.y.right = element_text(vjust = 1.2),
         axis.title.x.top = element_text(vjust = 1.2))
 
-ggsave(plot3, filename = file.path('plots', 'plot3.png'), height = 12, width = 18, units = 'cm')
 #=======================================#
