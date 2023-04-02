@@ -6,3 +6,5 @@
 forecasts/
 scores/
 .forecasts/
+plots/
+.png
