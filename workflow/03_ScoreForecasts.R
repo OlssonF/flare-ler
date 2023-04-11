@@ -163,7 +163,7 @@ write_csv(shadow_summary, file = 'shadow_summary.csv')
 
 # choose 1 to have a go at plotting
 
-example_refdate <- '2020-10-25 00:00:00' # '2021-06-20 00:00:00'
+example_refdate <- '2022-10-24 00:00:00' # '2021-06-20 00:00:00'
 mod <- 'RW'
 dep <- 8 # 1
 
