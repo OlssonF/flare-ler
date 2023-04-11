@@ -42,14 +42,21 @@ unique_reftime <- open_parquets |>
   pull(reference_datetime)
 model_refdates <- expand.grid(model_id = models, reference_datetime = unique_reftime)
 
+to_score <- model_refdates |> 
+  filter(model_id %in% c("RW", 
+                         "empirical",
+                         "empirical_ler",
+                         "ler",
+                         "climatology"))
+
 #==================================#
 
 #### Regular scoring function ####
-for (i in 1:nrow(model_refdates)) {
+for (i in 1:nrow(to_score)) {
   # subset the model and reference datetime
   forecast_df <- open_parquets|>
-  dplyr::filter(model_id == model_refdates$model_id[i], 
-                reference_datetime == model_refdates$reference_datetime[i]) |>
+  dplyr::filter(model_id == to_score$model_id[i], 
+                reference_datetime == to_score$reference_datetime[i]) |>
     mutate(site_id = 'fcre') |>
   collect()
   
@@ -58,11 +65,11 @@ for (i in 1:nrow(model_refdates)) {
     generate_forecast_score_arrow(targets_file = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
                                   forecast_df = forecast_df,
                                   local_directory = local_path)
-    message(i, "/", nrow(model_refdates), " forecasts scored")
+    message(i, "/", nrow(to_score), " forecasts scored")
     
     
   } else {
-    message('no forecast for ', model_refdates$model_id[i], ' ', model_refdates$reference_datetime[i] )
+    message('no forecast for ', to_score$model_id[i], ' ', to_score$reference_datetime[i] )
   }
   
 } 
