@@ -69,7 +69,7 @@ local <- FALSE
 if (local == TRUE) {
   scores_parquets <- arrow::open_dataset('./scores/site_id=fcre')
 } else {
-  s3_ler <- arrow::s3_bucket(bucket = "scores/ler_ms2/parquet",
+  s3_ler <- arrow::s3_bucket(bucket = "scores/ler_ms3/parquet",
                              endpoint_override =  "s3.flare-forecast.org",
                              anonymous = TRUE)
   
@@ -83,10 +83,15 @@ distinct_models <- scores_parquets |>
   filter(model_id != 'Simstrat_2') |> pull()
 
 # only weekly forecasts
-first_date <- as_datetime("2020-10-25 00:00:00")
+first_date <- scores_parquets %>%
+  distinct(reference_datetime) %>%
+  summarise(min(reference_datetime)) %>%
+  pull()
 
-last_date <- as_datetime("2022-10-23 00:00:00")
-
+last_date <- scores_parquets %>%
+  distinct(reference_datetime) %>%
+  summarise(max(reference_datetime)) %>%
+  pull()
 forecast_dates <- paste0(seq.Date(as.Date(first_date),as.Date(last_date), 7), ' 00:00:00')
 
 
