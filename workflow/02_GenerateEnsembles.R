@@ -11,9 +11,7 @@ library(arrow)
 library(tidyverse)
 library(lubridate)
 
-if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
-  setwd('../')
-} 
+setwd(here::here())
 
 rm(list = ls())
 gc()
@@ -29,7 +27,10 @@ gc()
 # Individual process model forecasts
 message('read in individual models from file')
 
-forecast_parquets <- arrow::open_dataset('./forecasts/site_id=fcre')
+# Reads in from a local directory
+local_path <- './forecasts/reruns'
+
+forecast_parquets <- arrow::open_dataset(local_path)
 
 GOTM_forecast <- forecast_parquets |>
   filter(model_id == 'GOTM',
@@ -69,7 +70,7 @@ message('Climatology read')
 # function to create the multi-model ensemble, by resampling each individual model
 # ensemble before combining
 
-create.mme <- function(forecasts, n = 256, ensemble_name) {
+create.mme <- function(forecasts, n = 256, ensemble_name, path = local_path) {
   n_models <- length(forecasts)
   sample <- round(n / n_models, digits = 0)
 
@@ -78,7 +79,7 @@ create.mme <- function(forecasts, n = 256, ensemble_name) {
     forecast_sample <- get(forecasts[i]) %>%
       distinct(parameter) %>%
       slice_sample(n = sample) %>%
-      left_join(., get(forecasts[i]), by = "parameter") %>%
+      left_join(., get(forecasts[i]), by = "parameter", multiple = "all") %>%
       mutate(model_id = ensemble_name,
              site_id = 'fcre') %>%
       group_by(site_id, model_id, reference_datetime)
@@ -88,11 +89,13 @@ create.mme <- function(forecasts, n = 256, ensemble_name) {
   }
   
   mme_forecast |>
-    arrow::write_dataset('./forecasts')
+    arrow::write_dataset(local_path)
   message(ensemble_name, ' generated')
 }
 
 ##### Generate the multi model ensembles ####
+gc()
+
 message('generate the multi-model ensembles')
 create.mme(forecasts = c('RW_forecast',
                          'climatology_forecast'),
