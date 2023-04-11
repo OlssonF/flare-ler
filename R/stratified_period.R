@@ -10,6 +10,7 @@ calc_strat_dates <- function(density_diff, targets) {
     pivot_wider(names_from = depth, 
                 values_from = c(density, observation), 
                 id_cols = c(datetime, site_id)) %>%
+    arrange(datetime) |> 
     mutate(strat = ifelse(density_8.75 - density_0 > density_diff &
                             observation_0 > observation_8.75,
                           1, 0),
