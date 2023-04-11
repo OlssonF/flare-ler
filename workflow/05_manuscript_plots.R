@@ -52,11 +52,11 @@ shapes <- c('climatology' = 15,
                'PM_Ensemble' =  17, 
                'Full_Ensemble' = 17)
 
-strat_dates <- calc_strat_dates(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+strat_dates <- calc_strat_dates(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                                       density_diff = 0.1)  %>% na.omit()
-inverse_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+inverse_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                                         density_diff = 0.1, inverse = T)  %>% na.omit()
-strat_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+strat_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                               density_diff = 0.1, inverse = F)  %>% na.omit()
 
 #=========================================
@@ -67,7 +67,7 @@ strat_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/l
 local <- FALSE
 
 if (local == TRUE) {
-  scores_parquets <- arrow::open_dataset('./scores/site_id=fcre')
+  scores_parquets <- arrow::open_dataset('./scores/reruns/site_id=fcre')
 } else {
   s3_ler <- arrow::s3_bucket(bucket = "scores/ler_ms3/parquet",
                              endpoint_override =  "s3.flare-forecast.org",

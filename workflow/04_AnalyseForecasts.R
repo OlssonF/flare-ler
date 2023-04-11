@@ -32,7 +32,7 @@ cols <- c('persistence' = "#455BCDFF",
           'full_ensemble' = 'darkgrey')
 
 
-strat_dates <- stratification_density(targets = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+strat_dates <- stratification_density(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                        density_diff = 0.1)  %>% na.omit()
 
 # read in scored forecasts ###

@@ -62,7 +62,7 @@ for (i in 1:nrow(to_score)) {
   
   if (nrow(forecast_df) != 0) {
     # Score the forecast
-    generate_forecast_score_arrow(targets_file = 'https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv',
+    generate_forecast_score_arrow(targets_file = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                                   forecast_df = forecast_df,
                                   local_directory = local_path)
     message(i, "/", nrow(to_score), " forecasts scored")
@@ -130,7 +130,7 @@ for (i in 1:length(new_scores)) {
 ### Shadowing time ####
 # Calculating the shadowing time uses 1 forecast each reference_Datetime-model combination independently
 # read in the targets
-targets_df <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') |> 
+targets_df <- read_csv('https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv') |> 
   mutate(site_id = paste0(site_id, '_', depth))
 
 
