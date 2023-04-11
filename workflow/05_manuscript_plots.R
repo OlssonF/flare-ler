@@ -53,7 +53,7 @@ shapes <- c('climatology' = 15,
                'Full_Ensemble' = 17)
 
 strat_dates <- calc_strat_dates(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
-                                      density_diff = 0.1)  %>% na.omit()
+                                      density_diff = 0.1)  %>% na.omit() 
 inverse_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                                         density_diff = 0.1, inverse = T)  %>% na.omit()
 strat_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
@@ -123,6 +123,8 @@ all_scored <-  all_scored |>
                                               "Simstrat"='PM_3',
                                               "RW" = "persistence",
                                               "ler" = "PM_Ensemble")))
+out_dir <- 'plots/reruns'
+
 #=======================================#
 
 ### PLOT 2 - observations ####
@@ -145,7 +147,7 @@ plot2 <-
   scale_colour_viridis_d(name = 'Depth (m)', option = "H", begin = 0.9, end = 0.1) +
   theme(panel.grid.minor = element_blank())
 
-ggsave(plot2, filename = file.path('plots', 'plot2.png'), height = 10, width = 18, units = 'cm')
+ggsave(plot2, filename = file.path(out_dir, 'plot2.png'), height = 10, width = 18, units = 'cm')
 
 #=============================#
 
@@ -215,7 +217,7 @@ logs_plot <- all_scored %>%
 plot3 <- ggpubr::ggarrange(absbias_plot, variance_plot, logs_plot, 
                            ncol  = 3, common.legend = T, align = "hv", labels = 'auto') 
 
-ggsave(plot3, filename = file.path('plots', 'plot3.png'), height = 10, width = 21, units = 'cm')
+ggsave(plot3, filename = file.path(out_dir, 'plot3.png'), height = 10, width = 21, units = 'cm')
 
 ### PLOT 4 - MONEY PLOT ======
 
@@ -286,7 +288,7 @@ logs_plot <- all_scored %>%
 plot4 <- ggpubr::ggarrange(bias_plot, variance_plot, logs_plot, 
                            ncol  = 3, common.legend = T, align = "hv") 
 
-ggsave(plot4, filename = file.path('plots', 'plot4.png'), height = 10, width = 15, units = 'cm')
+ggsave(plot4, filename = file.path(out_dir, 'plot4.png'), height = 10, width = 15, units = 'cm')
 
 #===============================================#
 
@@ -316,7 +318,7 @@ plot5 <-
   labs(y = 'Ignorance score', x = 'Horizon') +
   theme_bw()
 
-ggsave(plot5, filename = file.path('plots', 'plot5.png'), height = 12, width = 15, units = 'cm')
+ggsave(plot5, filename = file.path(out_dir, 'plot5.png'), height = 12, width = 15, units = 'cm')
 
 ####================================#
 
@@ -354,17 +356,30 @@ plot6 <-
   labs(x= 'Mean shadowing length (days)', y = 'Depth (m)') +
   theme(panel.spacing = unit(1, "lines"))
 
-ggsave(plot6, filename = file.path('plots', 'plot6.png'), height = 7, width = 15, units = 'cm')
+ggsave(plot6, filename = file.path(out_dir, 'plot6.png'), height = 7, width = 15, units = 'cm')
 
-shadow_summary |>
-  group_by(model_id) |> 
-  summarise(mean_shadow = mean(shadow_length, na.rm = T)) 
+
   
 #=====================================#
 
+### Numbers for text/tables ====
+# aggregated scores
+all_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 1, 14), 
+         model_id %in% all_models) %>% 
+  mutate(var = sd^2, 
+         abs_bias = abs(mean - observation)) %>% 
+  group_by(model_id) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() |> 
+  select(model_id, abs_bias, var, logs)
 
 
-
+# summary shadow time
+shadow_summary |>
+  group_by(model_id) |> 
+  summarise(mean_shadow = mean(shadow_length, na.rm = T)) 
 ### Supplementary information.... ======
 ## PM fits 
 SI_fig <- all_scored %>%
