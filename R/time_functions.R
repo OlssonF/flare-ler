@@ -22,7 +22,8 @@ is_strat  <- function(datetime, strat_dates) {
     left_join(., strat_dates, by = 'year') %>%
     mutate(start = as_datetime(start),
            end = as_datetime(end)) %>% 
-    mutate(strat = ifelse(datetime >= start & datetime <= end, 'stratified_period', 'mixed_period'))
+    mutate(strat = ifelse(year == 2023, 'mixed_period', 
+                          ifelse(datetime >= start & datetime <= end , 'stratified_period', 'mixed_period')))
   
   return(df$strat)
 }
