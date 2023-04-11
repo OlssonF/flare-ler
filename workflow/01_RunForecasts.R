@@ -15,24 +15,23 @@ Sys.setenv("AWS_EC2_METADATA_DISABLED"="TRUE")
 Sys.setenv('USE_HTTPS' = TRUE)
 options(dplyr.summarise.inform = FALSE)
 
-if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)){
-  setwd('../')
-}
+setwd(here::here())
 
 #### a) LER forecasts ####
 # The LER foreacsts are produced within the FLARE-LER workflow
 
-# Read in the raw forecasts from s3 bucket
-s3_ler <- arrow::s3_bucket(bucket = "forecasts/ler_ms2/parquet",
+# Read in the raw forecasts from s3 bucket (ler_ms3 for reruns)
+s3_ler <- arrow::s3_bucket(bucket = "forecasts/ler_ms3/parquet",
                            endpoint_override =  "s3.flare-forecast.org",
                            anonymous = TRUE)
 
 ds_ler <- arrow::open_dataset(s3_ler) 
 
 # ler_parquet_files <- ds_ler$files[which(is.na(str_match(ds_ler$files, "GLM/")))]
+local_path <- './forecasts/reruns'
 
-if (!dir.exists('./forecasts/')) {
-  dir.create('./forecasts/')
+if (!dir.exists(local_path)) {
+  dir.create(local_path)
 }
 
 # When to produce forecasts for
@@ -53,21 +52,21 @@ ds_ler |>
                 reference_datetime %in% forecast_dates) |>
   dplyr::collect() |>
   dplyr::group_by(site_id, model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts')
+  arrow::write_dataset(path = local_path)
 
 ds_ler |>
   dplyr::filter(model_id == 'GLM',
                 reference_datetime %in% forecast_dates) |>
   dplyr::collect() |>
   dplyr::group_by(site_id, model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts')
+  arrow::write_dataset(path = local_path)
 
 ds_ler |>
   dplyr::filter(model_id == 'Simstrat',
                 reference_datetime %in% forecast_dates) |>
   dplyr::collect() |>
   dplyr::group_by(site_id, model_id, reference_datetime) |>
-  arrow::write_dataset(path = './forecasts')
+  arrow::write_dataset(path = local_path)
 
 
 #### b) Baseline forecasts ####
@@ -255,19 +254,14 @@ climatology_forecast <- climatology %>%
 
 #### c) Write forecasts to file ####
 forecasts <- ls(pattern = '_forecast')
+
 # Runs differently in console and jobs
 for (i in 1:length(forecasts)) {
   
-  if (getwd() == dirname(rstudioapi::getSourceEditorContext()$path)) {
-    get(forecasts[i])|>
+  get(forecasts[i])|>
       dplyr::group_by(site_id, model_id, reference_datetime) |>
-      arrow::write_dataset(path = '../forecasts/')
-    
-  } else {
-    get(forecasts[i])|>
-      dplyr::group_by(site_id, model_id, reference_datetime) |>
-      arrow::write_dataset(path = './forecasts/') 
-  }
+      arrow::write_dataset(path = local_path) 
+  
   message(forecasts[i],' written')
 }
 
