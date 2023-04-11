@@ -71,7 +71,7 @@ ds_ler |>
 
 #### b) Baseline forecasts ####
 # Targets data needed to produce baseline forecasts
-targets <- read_csv('https://s3.flare-forecast.org/targets/ler_ms/fcre/fcre-targets-insitu.csv') %>%
+targets <- read_csv('https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv') %>%
   filter(variable == 'temperature')
 
 
@@ -86,7 +86,7 @@ forecast.RW  <- function(start, h= 15, depth_use) {
   
   # Work out when the forecast should start
   forecast_starts <- targets %>%
-    dplyr::filter(!is.na(observation) & depth == depth_use & datetime < start)
+    dplyr::filter(!is.na(observation) & depth == depth_use & datetime <= start)
   
   if (nrow(forecast_starts) !=0) {
     forecast_starts <- forecast_starts %>%
@@ -99,7 +99,7 @@ forecast.RW  <- function(start, h= 15, depth_use) {
     RW_model <- targets %>%
       mutate(datetime = as_date(datetime)) %>%
       # filter the targets data for the depth and start time
-      dplyr::filter(depth == depth_use & datetime < start) %>%
+      dplyr::filter(depth == depth_use & datetime <= start) %>%
       tsibble::as_tsibble(key = 'depth', index = 'datetime') %>%
       # add NA values
       tsibble::fill_gaps() %>%
@@ -111,7 +111,7 @@ forecast.RW  <- function(start, h= 15, depth_use) {
     # Generate the forecast
     RW_forecast <- RW_model %>%
       fabletools::generate(h = as.numeric(forecast_starts$h),
-                           bootstrap = T,
+                           bootstrap = T, 
                            times = 256) %>%
       rename(model_id = .model,
              prediction = .sim,
@@ -125,8 +125,7 @@ forecast.RW  <- function(start, h= 15, depth_use) {
              family = 'ensemble',
              forecast = 0,
              variable_type = 'state',
-             pub_time = Sys.time()
-      ) 
+             pub_time = Sys.time()) 
     
     message('RW forecast for ', start, ' at ', depth_use, ' m')
     return(RW_forecast)
