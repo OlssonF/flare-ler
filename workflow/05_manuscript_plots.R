@@ -178,20 +178,19 @@ absbias_plot <-
 
 
 # variance
-variance_plot <- all_scored %>%
+sd_plot <- all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
          model_id %in% all_models) %>% 
-  mutate(var = sd^2) %>% 
   group_by(horizon, model_id) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
-  ggplot(., aes(x=horizon, y= var, colour = model_id, linetype = model_id)) +
+  ggplot(., aes(x=horizon, y= sd, colour = model_id, linetype = model_id)) +
   geom_line(linewidth = 0.9) +
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y= expression(paste("Variance (°", C^2, ")")), 
+  labs(y= expression(paste("Standard deviation (°C)")), 
        x = 'Horizon (days)') +
   theme_bw()+
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) 
@@ -214,7 +213,7 @@ logs_plot <- all_scored %>%
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
 
 
-plot3 <- ggpubr::ggarrange(absbias_plot, variance_plot, logs_plot, 
+plot3 <- ggpubr::ggarrange(absbias_plot, sd_plot, logs_plot, 
                            ncol  = 3, common.legend = T, align = "hv", labels = 'auto') 
 
 ggsave(plot3, filename = file.path(out_dir, 'plot3.png'), height = 10, width = 21, units = 'cm')
@@ -245,22 +244,21 @@ bias_plot <-
 
 
 # variance
-variance_plot <- all_scored %>%
+sd_plot <- all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
          model_id %in% all_models,
          depth %in% c(1,8)) %>% 
-  mutate(var = sd^2) %>% 
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
-  ggplot(., aes(x=horizon, y= var, colour = model_id, linetype = model_id)) +
+  ggplot(., aes(x=horizon, y= sd, colour = model_id, linetype = model_id)) +
   geom_line(linewidth = 0.9) +
   facet_wrap(~depth, ncol = 1, labeller = label_both)+
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y= expression(paste("Variance (°", C^2, ")")), 
+  labs(y= expression(paste("Standard deviation(°C)")), 
        x = 'Horizon (days)') +
   theme_bw()+
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) 
@@ -285,7 +283,7 @@ logs_plot <- all_scored %>%
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
 
 
-plot4 <- ggpubr::ggarrange(bias_plot, variance_plot, logs_plot, 
+plot4 <- ggpubr::ggarrange(bias_plot, sd_plot, logs_plot, 
                            ncol  = 3, common.legend = T, align = "hv") 
 
 ggsave(plot4, filename = file.path(out_dir, 'plot4.png'), height = 10, width = 15, units = 'cm')
@@ -368,18 +366,19 @@ all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
          model_id %in% all_models) %>% 
-  mutate(var = sd^2, 
-         abs_bias = abs(mean - observation)) %>% 
+  mutate(abs_bias = abs(mean - observation)) %>% 
   group_by(model_id) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() |> 
-  select(model_id, abs_bias, var, logs)
+  select(model_id, abs_bias, sd, logs)
 
 
 # summary shadow time
 shadow_summary |>
   group_by(model_id) |> 
   summarise(mean_shadow = mean(shadow_length, na.rm = T)) 
+
+
 ### Supplementary information.... ======
 ## PM fits 
 SI_fig <- all_scored %>%
