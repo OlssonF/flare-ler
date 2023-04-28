@@ -17,6 +17,7 @@ baselines_ensembles <- c('Full_Ensemble', 'persistence', 'climatology', 'PM_Ense
 process_models <- c('PM_Ensemble', 'PM_1', 'PM_2', 'PM_3')
 baseline_models <- c('climatology', 'persistence')
 individual_models <-  c('persistence', 'climatology', 'PM_1', 'PM_2', 'PM_3')
+ensemble_models <- c('Full_Ensemble', 'PM_Ensemble')
 
 time_periods <- c(stratified_period = "Stratified", 
                   mixed_period = "Mixed")
@@ -151,11 +152,66 @@ ggsave(plot2, filename = file.path(out_dir, 'plot2.png'), height = 10, width = 1
 
 #=============================#
 
+# === PLOT 3 - example forecasts ====
+layout_design <- "
+  ABC
+  DE#
+  FG#
+"
+forecast_date_plots <- c('2023-02-20 00:00:00',  '2022-08-01 00:00:00')
+example_levels <- c('PM_1', 'PM_2', 'PM_3',
+                    'persistence', 'climatology', 
+                    'PM_Ensemble','Full_Ensemble')
+
+forecast_example1 <- all_scored |>
+  filter(reference_datetime == forecast_date_plots[1], (depth == 1),
+         model_id != 'empirical') |> 
+  ggplot(aes(x=horizon, y = median)) + geom_line(aes( colour = model_id),linewidth = 1) +
+  geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, fill = model_id), alpha = 0.1) +
+  theme_bw() + 
+  facet_manual(~factor(model_id, levels = example_levels),
+               design = layout_design) +
+  geom_point(aes(y=observation)) +
+  scale_y_continuous(limits = c(0,16)) +
+  scale_x_continuous(breaks = c(0,2,4,6,8,10,12,14)) +
+  labs(title = paste0('Forecast start: ', forecast_date_plots[1], ' & Depth: 1 m'),
+       y = 'Water temperature °C') +
+  scale_colour_manual(values = cols, limits = all_models, name = 'Model')  +
+  scale_fill_manual(values = cols, limits = all_models, name = 'Model') +
+  theme(legend.position = c(0.8,0.25))
 
 
+forecast_example2 <- all_scored |>
+  filter(reference_datetime == forecast_date_plots[2], (depth == 8),
+         model_id != 'empirical') |> 
+  ggplot(aes(x=horizon, y = median)) + geom_line(aes( colour = model_id),linewidth = 1) +
+  geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, fill = model_id), alpha = 0.1) +
+  theme_bw() + 
+  facet_manual(~factor(model_id, levels = example_levels),
+               design = layout_design) +
+  geom_point(aes(y=observation)) +
+  scale_x_continuous(breaks = c(0,2,4,6,8,10,12,14)) +
+  labs(title = paste0('Forecast start: ', forecast_date_plots[2], ' & Depth: 8 m'),
+       y = 'Water temperature °C') +
+  scale_colour_manual(values = cols, limits = all_models, name = 'Model')  +
+  scale_fill_manual(values = cols, limits = all_models, name = 'Model') +
+  theme(legend.position = c(0.8,0.25))
 
 
-#### PLOT 3 - summary plot ####
+plot_3 <- ggpubr::ggarrange(forecast_example1, forecast_example2, 
+                             nrow = 2, 
+                             common.legend = T, legend = 'none')
+plot_3a <- ggpubr::ggarrange(forecast_example1, forecast_example2, 
+                             nrow = 1, 
+                             common.legend = T, legend = 'none')
+
+ggsave(plot_3, filename = file.path(out_dir, 'plot3.png'), height = 20, width = 14, units = 'cm')
+ggsave(plot_3a, filename = file.path(out_dir, 'plot3a.png'), height = 10, width = 25, units = 'cm')
+
+
+#===============================#
+
+#### PLOT 4 - summary plot ####
 # bias
 absbias_plot <- 
   all_scored %>%
@@ -213,12 +269,12 @@ logs_plot <- all_scored %>%
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
 
 
-plot3 <- ggpubr::ggarrange(absbias_plot, sd_plot, logs_plot, 
+plot4 <- ggpubr::ggarrange(absbias_plot, sd_plot, logs_plot, 
                            ncol  = 3, common.legend = T, align = "hv", labels = 'auto') 
 
-ggsave(plot3, filename = file.path(out_dir, 'plot3.png'), height = 10, width = 21, units = 'cm')
+ggsave(plot4, filename = file.path(out_dir, 'plot4.png'), height = 10, width = 21, units = 'cm')
 
-### PLOT 4 - MONEY PLOT ======
+### PLOT 5 - MONEY PLOT ======
 
 # bias
 bias_plot <- 
@@ -258,7 +314,7 @@ sd_plot <- all_scored %>%
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y= expression(paste("Standard deviation(°C)")), 
+  labs(y= expression(paste("Standard deviation (°C)")), 
        x = 'Horizon (days)') +
   theme_bw()+
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) 
@@ -283,22 +339,21 @@ logs_plot <- all_scored %>%
   guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
 
 
-plot4 <- ggpubr::ggarrange(bias_plot, sd_plot, logs_plot, 
+plot5 <- ggpubr::ggarrange(bias_plot, sd_plot, logs_plot, 
                            ncol  = 3, common.legend = T, align = "hv") 
 
-ggsave(plot4, filename = file.path(out_dir, 'plot4.png'), height = 10, width = 15, units = 'cm')
+ggsave(plot5, filename = file.path(out_dir, 'plot5.png'), height = 10, width = 15, units = 'cm')
 
 #===============================================#
 
 
-### PLOT 5 - LER v process model IGN ####
+### PLOT 6 - LER v process model IGN ####
 # LER vs process models, split by stratification
-plot5 <-
+plot6 <-
   all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
-         depth %in% c(1,8), 
-         model_id %in% all_models) %>% 
+         depth %in% c(1,8), model_id %in% all_models) %>% 
   mutate(strat = is_strat(datetime, strat_dates)) %>%
   group_by(horizon, model_id, depth, strat) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
@@ -316,7 +371,7 @@ plot5 <-
   labs(y = 'Ignorance score', x = 'Horizon') +
   theme_bw()
 
-ggsave(plot5, filename = file.path(out_dir, 'plot5.png'), height = 12, width = 15, units = 'cm')
+ggsave(plot6, filename = file.path(out_dir, 'plot5.png'), height = 12, width = 15, units = 'cm')
 
 ####================================#
 
@@ -325,7 +380,7 @@ ggsave(plot5, filename = file.path(out_dir, 'plot5.png'), height = 12, width = 1
 
 
 
-### PLOT 6 - Shadowing time plot ======
+### PLOT 7 - Shadowing time plot ======
 shadow_summary <- read_csv('shadow_summary.csv') |> 
   mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full_Ensemble",
                                               "GLM"="PM_1",
@@ -335,7 +390,7 @@ shadow_summary <- read_csv('shadow_summary.csv') |>
                                               "ler" = "PM_Ensemble"))) |> 
   filter(model_id != 'empirical')
 
-plot6 <- 
+plot7 <- 
   shadow_summary |>
   mutate(strat = is_strat(reference_datetime, strat_dates)) %>%
   group_by(depth, model_id, strat) |> 
@@ -354,7 +409,7 @@ plot6 <-
   labs(x= 'Mean shadowing length (days)', y = 'Depth (m)') +
   theme(panel.spacing = unit(1, "lines"))
 
-ggsave(plot6, filename = file.path(out_dir, 'plot6.png'), height = 7, width = 15, units = 'cm')
+ggsave(plot7, filename = file.path(out_dir, 'plot7.png'), height = 7, width = 15, units = 'cm')
 
 
   
@@ -380,7 +435,30 @@ shadow_summary |>
 
 
 ### Supplementary information.... ======
-## PM fits 
+
+## Median strat-depth scores ####
+all_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 1, 14), 
+         depth %in% c(1,8), model_id %in% all_models) %>% 
+  mutate(strat = is_strat(datetime, strat_dates)) %>%
+  group_by(horizon, model_id, depth, strat) %>%
+  summarise_if(is.numeric, median, na.rm = T) %>%
+  na.omit() %>%
+  ggplot(., aes(x=horizon, y= logs, colour = model_id, linetype = model_id)) +
+  geom_line(linewidth = 0.9) +
+  facet_grid(depth~strat, labeller = labeller(.rows = label_both, .cols = time_periods)) +
+  scale_colour_manual(values = cols, 
+                      limits = all_models,
+                      name = 'Model') +
+  scale_linetype_manual(values = linetypes, 
+                        limits = all_models,
+                        name = 'Model') +
+  scale_x_continuous(breaks = c(1,7,14)) +
+  labs(y = 'Ignorance score', x = 'Horizon') +
+  theme_bw()
+
+### PM fits #### 
 SI_fig <- all_scored %>%
   filter(variable == 'temperature',
          horizon %in%  c(1, 7, 14),
