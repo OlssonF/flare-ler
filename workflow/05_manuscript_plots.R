@@ -371,7 +371,7 @@ plot6 <-
   labs(y = 'Ignorance score', x = 'Horizon') +
   theme_bw()
 
-ggsave(plot6, filename = file.path(out_dir, 'plot5.png'), height = 12, width = 15, units = 'cm')
+ggsave(plot6, filename = file.path(out_dir, 'plot6.png'), height = 12, width = 15, units = 'cm')
 
 ####================================#
 
