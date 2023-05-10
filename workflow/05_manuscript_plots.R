@@ -1,6 +1,7 @@
 library(arrow)
 library(tidyverse)
 library(lubridate)
+library(ggh4x)
 
 source('R/shadow_time.R')
 source('R/time_functions.R')
@@ -190,6 +191,7 @@ forecast_example2 <- all_scored |>
   facet_manual(~factor(model_id, levels = example_levels),
                design = layout_design) +
   geom_point(aes(y=observation)) +
+  scale_y_continuous(limits = c(0,16)) +
   scale_x_continuous(breaks = c(0,2,4,6,8,10,12,14)) +
   labs(title = paste0('Forecast start: ', forecast_date_plots[2], ' & Depth: 8 m'),
        y = 'Water temperature °C') +
