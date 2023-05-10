@@ -7,4 +7,5 @@ forecasts/
 scores/
 .forecasts/
 plots/
-.png
+*.png
+notes/
