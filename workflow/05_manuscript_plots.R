@@ -191,7 +191,7 @@ forecast_example2 <- all_scored |>
   facet_manual(~factor(model_id, levels = example_levels),
                design = layout_design) +
   geom_point(aes(y=observation)) +
-  scale_y_continuous(limits = c(0,16)) +
+  scale_y_continuous(limits = c(5,15), breaks = seq(6,14,2)) +
   scale_x_continuous(breaks = c(0,2,4,6,8,10,12,14)) +
   labs(title = paste0('Forecast start: ', forecast_date_plots[2], ' & Depth: 8 m'),
        y = 'Water temperature °C') +
@@ -202,13 +202,15 @@ forecast_example2 <- all_scored |>
 
 plot_3 <- ggpubr::ggarrange(forecast_example1, forecast_example2, 
                              nrow = 2, 
-                             common.legend = T, legend = 'none')
+                             common.legend = T, legend = 'none') +
+  theme(panel.grid.minor = element_blank())
 plot_3a <- ggpubr::ggarrange(forecast_example1, forecast_example2, 
                              nrow = 1, 
-                             common.legend = T, legend = 'none')
+                             common.legend = T, legend = 'none')  +
+  theme(panel.grid.minor = element_blank())
 
 ggsave(plot_3, filename = file.path(out_dir, 'plot3.png'), height = 20, width = 14, units = 'cm')
-ggsave(plot_3a, filename = file.path(out_dir, 'plot3a.png'), height = 10, width = 25, units = 'cm')
+ggsave(plot_3a, filename = file.path(out_dir, 'plot3a.png'), height = 12, width = 25, units = 'cm')
 
 
 #===============================#
@@ -277,7 +279,13 @@ plot4 <- ggpubr::ggarrange(absbias_plot, sd_plot, logs_plot,
 ggsave(plot4, filename = file.path(out_dir, 'plot4.png'), height = 10, width = 21, units = 'cm')
 
 ### PLOT 5 - MONEY PLOT ======
-
+facet_tags <- data.frame(depth = c(1,8),
+                         metric = c('bias', 'bias',
+                                    'sd', 'sd',
+                                    'ign', 'ign'),
+                         tag = c('a)', 'b)',
+                                 'c)', 'd)', 
+                                 'e)', 'f)'))
 # bias
 bias_plot <- 
   all_scored %>%
@@ -289,8 +297,8 @@ bias_plot <-
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
-  ggplot(., aes(x=horizon, y= bias, colour = model_id, linetype = model_id)) +
-  geom_line(linewidth = 0.9) +
+  ggplot(.) +
+  geom_line(aes(x=horizon, y= bias, colour = model_id, linetype = model_id), linewidth = 0.9) +
   facet_wrap(~depth, ncol = 1, labeller = label_both)+
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
@@ -298,11 +306,17 @@ bias_plot <-
   labs(y = 'Bias (°C)',
        x = 'Horizon (days)') +
   theme_bw() +
-  guides(colour =guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
+  geom_text(data = subset(facet_tags, 
+                          metric == 'bias'),
+            mapping = aes(x = -1, y = 2.5, label = tag), 
+            size = 4, fontface = 'bold') +
+  guides(colour =guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))  + 
+  coord_cartesian(xlim = c(1, 14), ylim = c(-1.8, 1.8),clip = "off")
 
 
 # variance
-sd_plot <- all_scored %>%
+sd_plot <-
+  all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
          model_id %in% all_models,
@@ -310,19 +324,25 @@ sd_plot <- all_scored %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
-  ggplot(., aes(x=horizon, y= sd, colour = model_id, linetype = model_id)) +
-  geom_line(linewidth = 0.9) +
+  ggplot() +
+  geom_line(aes(x=horizon, y= sd, colour = model_id, linetype = model_id), linewidth = 0.9) +
   facet_wrap(~depth, ncol = 1, labeller = label_both)+
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y= expression(paste("Standard deviation (°C)")), 
+  labs(y = 'Standard deviation (°C)',
        x = 'Horizon (days)') +
-  theme_bw()+
-  guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) 
+  theme_bw() +
+  geom_text(data = subset(facet_tags, 
+                          metric == 'sd'),
+            mapping = aes(x = -1, y = 4.3, label = tag), 
+            size = 4, fontface = 'bold') +
+  guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) + 
+  coord_cartesian(xlim = c(1, 14), ylim = c(-0.5, 3.5), clip = "off")
 
 # log score
-logs_plot <- all_scored %>%
+logs_plot <- 
+  all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
          model_id %in%  all_models,
@@ -330,15 +350,20 @@ logs_plot <- all_scored %>%
   group_by(horizon, model_id, depth) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
-  ggplot(., aes(x=horizon, y= logs, colour = model_id, linetype = model_id)) +
-  geom_line(linewidth = 0.9) +
+  ggplot() +
+  geom_line(aes(x=horizon, y= logs, colour = model_id, linetype = model_id), linewidth = 0.9) +
   facet_wrap(~depth, ncol = 1, labeller = label_both)+
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
   labs(y = 'Ignorance score', x = 'Horizon (days)') +
   theme_bw()+
-  guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
+  geom_text(data = subset(facet_tags, 
+                          metric == 'ign'),
+            mapping = aes(x = -1, y = 4.3, label = tag), 
+            size = 4, fontface = 'bold') +
+  guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) + 
+  coord_cartesian(xlim = c(1, 14), ylim = c(-0.5, 3.5), clip = "off")
 
 
 plot5 <- ggpubr::ggarrange(bias_plot, sd_plot, logs_plot, 
