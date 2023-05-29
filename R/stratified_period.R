@@ -11,8 +11,8 @@ calc_strat_dates <- function(density_diff, targets) {
                 values_from = c(density, observation), 
                 id_cols = c(datetime, site_id)) %>%
     arrange(datetime) |> 
-    mutate(strat = ifelse(density_8.75 - density_0 > density_diff &
-                            observation_0 > observation_8.75,
+    mutate(strat = ifelse(density_8 - density_0 > density_diff &
+                            observation_0 > observation_8,
                           1, 0),
            strat = imputeTS::na_interpolation(strat, option = 'linear'))
   
@@ -80,8 +80,9 @@ calc_strat_freq <- function(targets, density_diff, inverse = F) {
       pivot_wider(names_from = depth, 
                   values_from = c(density, observation), 
                   id_cols = c(datetime, site_id)) %>%
-      mutate(strat = ifelse((density_8 - density_1) > density_diff &
-                                  observation_1 < observation_8,
+      mutate(dens_diff = density_8 - density_1,
+             strat = ifelse((dens_diff > density_diff) &
+                                  (observation_1 < observation_8),
                                 1, 0),
              strat = imputeTS::na_interpolation(strat, option = 'linear'))
   }
@@ -93,8 +94,8 @@ calc_strat_freq <- function(targets, density_diff, inverse = F) {
       pivot_wider(names_from = depth, 
                   values_from = c(density, observation), 
                   id_cols = c(datetime, site_id)) %>%
-      mutate(strat = ifelse(density_8.75 - density_0 > density_diff &
-                                  observation_0 > observation_8.75,
+      mutate(strat = ifelse(density_8 - density_0 > density_diff &
+                                  observation_0 > observation_9,
                                 1, 0),
              strat = imputeTS::na_interpolation(strat, option = 'linear'))  
   }
