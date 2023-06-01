@@ -283,9 +283,9 @@ facet_tags <- data.frame(depth = c(1,8),
                          metric = c('bias', 'bias',
                                     'sd', 'sd',
                                     'ign', 'ign'),
-                         tag = c('a)', 'b)',
-                                 'c)', 'd)', 
-                                 'e)', 'f)'))
+                         tag = c('a', 'b',
+                                 'c', 'd', 
+                                 'e', 'f'))
 # bias
 bias_plot <- 
   all_scored %>%
@@ -375,6 +375,11 @@ ggsave(plot5, filename = file.path(out_dir, 'plot5.png'), height = 10, width = 1
 
 
 ### PLOT 6 - LER v process model IGN ####
+facet_tags <- data.frame(depth = c(1,8),
+                         strat = c('stratified_period', 'mixed_period',
+                                   'mixed_period', 'stratified_period'),
+                         tag = c('c)', 'b)',
+                                 'a)', 'd)'))
 # LER vs process models, split by stratification
 plot6 <-
   all_scored %>%
@@ -385,8 +390,8 @@ plot6 <-
   group_by(horizon, model_id, depth, strat) %>%
   summarise_if(is.numeric, mean, na.rm = T) %>%
   na.omit() %>%
-  ggplot(., aes(x=horizon, y= logs, colour = model_id, linetype = model_id)) +
-  geom_line(linewidth = 0.9) +
+  ggplot() +
+  geom_line(aes(x=horizon, y= logs, colour = model_id, linetype = model_id), linewidth = 0.9) +
   facet_grid(depth~strat, labeller = labeller(.rows = label_both, .cols = time_periods)) +
   scale_colour_manual(values = cols, 
                       limits = all_models,
@@ -396,11 +401,14 @@ plot6 <-
                         name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
   labs(y = 'Ignorance score', x = 'Horizon') +
-  theme_bw()
+  theme_bw() +
+  geom_text(data = facet_tags,
+            mapping = aes(x = 1.5, y = 7.5, label = tag), 
+            size = 4, fontface = 'bold')
 
-ggsave(plot6, filename = file.path(out_dir, 'plot6.png'), height = 12, width = 15, units = 'cm')
+ggsave(plot6, filename = file.path(out_dir, 'plot6.png'), height = 12, width = 16, units = 'cm')
 
-####================================#
+`####================================#
 
 
 #===============================================#
