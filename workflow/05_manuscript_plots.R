@@ -542,3 +542,28 @@ SI_fig <- all_scored %>%
         axis.title.x.top = element_text(vjust = 1.2))
 
 #=======================================#
+
+### bad November forecasts
+all_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 1, 14), 
+         depth %in% c(8), 
+         model_id == 'persistence', 
+         reference_datetime %in% c('2022-11-14 00:00:00', '2022-11-07 00:00:00', '2022-11-21 00:00:00'))  |> 
+  ggplot(aes(x=datetime, y = median)) + 
+  geom_line(aes(colour = model_id,
+                group = reference_datetime),
+            linewidth = 1) +
+  geom_ribbon(aes(ymax = quantile97.5, 
+                  ymin = quantile02.5, 
+                  fill = model_id, 
+                  group = reference_datetime), 
+              alpha = 0.1) +
+  theme_bw() + 
+  facet_wrap(~factor(model_id)) +
+  geom_point(aes(y=observation)) +
+  scale_y_continuous(limits = c(0,16)) +
+  labs(title = '8 m forecast Nov 14 2022',
+       y = 'Water temperature °C') +
+  scale_colour_manual(values = cols, limits = 'persistence', name = 'Model')  +
+  scale_fill_manual(values = cols, limits = 'persistence', name = 'Model') 
