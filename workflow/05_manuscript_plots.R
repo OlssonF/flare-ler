@@ -127,6 +127,17 @@ all_scored <-  all_scored |>
                                               "ler" = "PM_Ensemble")))
 out_dir <- 'plots/reruns'
 
+
+
+shadow_summary <- read_csv('shadow_summary.csv') |> 
+  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full_Ensemble",
+                                              "GLM"="PM_1",
+                                              "GOTM"='PM_2',
+                                              "Simstrat"='PM_3',
+                                              "RW" = "persistence",
+                                              "ler" = "PM_Ensemble"))) |> 
+  filter(model_id != 'empirical')
+
 #=======================================#
 
 ### PLOT 2 - observations ####
@@ -416,15 +427,6 @@ ggsave(plot6, filename = file.path(out_dir, 'plot6.png'), height = 12, width = 1
 
 
 ### PLOT 7 - Shadowing time plot ======
-shadow_summary <- read_csv('shadow_summary.csv') |> 
-  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full_Ensemble",
-                                              "GLM"="PM_1",
-                                              "GOTM"='PM_2',
-                                              "Simstrat"='PM_3',
-                                              "RW" = "persistence",
-                                              "ler" = "PM_Ensemble"))) |> 
-  filter(model_id != 'empirical')
-
 plot7 <- 
   shadow_summary |>
   mutate(strat = is_strat(reference_datetime, strat_dates)) %>%
@@ -450,7 +452,7 @@ ggsave(plot7, filename = file.path(out_dir, 'plot7.png'), height = 7, width = 15
   
 #=====================================#
 
-### Numbers for text/tables ====
+### Table 1 ====
 # aggregated scores
 all_scored %>%
   filter(variable == 'temperature',
@@ -470,6 +472,21 @@ shadow_summary |>
 
 
 ### Supplementary information.... ======
+
+# Table S1 of scores for 1 and 8 m
+
+all_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 1, 14), 
+         model_id %in% all_models, 
+         depth %in% c(1,8)) %>% 
+  mutate(abs_bias = abs(mean - observation)) %>% 
+  group_by(model_id, depth) %>%
+  summarise_if(is.numeric, mean, na.rm = T) %>%
+  na.omit() |> 
+  select(model_id, abs_bias, sd, logs, depth) |> 
+  pivot_wider(names_from = depth, values_from = abs_bias:logs)
+
 
 ## Median strat-depth scores ####
 all_scored %>%
