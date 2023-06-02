@@ -123,3 +123,18 @@ calc_strat_freq <- function(targets, density_diff, inverse = F) {
   return(strat)
 }
 
+
+calc_thermo <- function(start, end, targets) {
+  
+  wtr <- read_csv(targets, show_col_types = F, progress = F) %>%
+    filter(variable == 'temperature') %>% 
+    pivot_wider(names_from = depth, names_prefix = 'wtr_', values_from = observation) |> 
+    select(-site_id, -variable)
+    
+  thermo_depth <- rLakeAnalyzer::ts.thermo.depth(wtr) |> 
+    filter(datetime >= as_date(start) &
+             datetime <= as_date(end)) |> 
+    summarise(mean_thermo = mean(thermo.depth, na.rm = T))
+  
+  return(data.frame(start = start, end = end, mean_thermo = thermo_depth))
+}
