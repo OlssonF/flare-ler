@@ -60,6 +60,10 @@ inverse_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets
                                         density_diff = 0.1, inverse = T)  %>% na.omit()
 strat_freq <- calc_strat_freq(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                               density_diff = 0.1, inverse = F)  %>% na.omit()
+mean_thermo <- calc_thermo(start = strat_dates$start[3], end = strat_dates$end[3], 
+                           targets =  'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv') |> 
+  full_join(calc_thermo(start = strat_dates$start[4], end = strat_dates$end[4], 
+                        targets =  'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv'))
 
 #=========================================
 
@@ -472,7 +476,34 @@ shadow_summary |>
 
 
 ### Supplementary information.... ======
+#### how often are the MMEs best/worst ####
+all_scored %>%
+  filter(variable == 'temperature',
+         horizon %in% c(1,7,14), 
+         model_id %in% all_models, 
+         depth %in% c(1, 8)) |> 
+  group_by(reference_datetime, depth, horizon) |> 
+  slice_min(logs) |> 
+  group_by(model_id, depth, horizon) |> 
+  summarise(n=n()) |> 
+  pivot_wider(names_from = model_id, 
+              id_cols = depth:horizon, 
+              values_from  = n, 
+              values_fill = 0)
 
+all_scored %>%
+  filter(variable == 'temperature',
+         horizon %in% c(1,7,14), 
+         model_id %in% all_models, 
+         depth %in% c(1, 8)) |> 
+  group_by(reference_datetime, depth, horizon) |> 
+  slice_max(logs) |> 
+  group_by(model_id, depth, horizon) |> 
+  summarise(n=n()) |> 
+  pivot_wider(names_from = model_id, 
+              id_cols = depth:horizon, 
+              values_from  = n, 
+              values_fill = 0)
 # Table S1 of scores for 1 and 8 m
 
 all_scored %>%
@@ -543,7 +574,18 @@ SI_fig <- all_scored %>%
 
 #=======================================#
 
-### bad November forecasts
+#### bad November forecasts ####
+all_scored %>%
+  filter(variable == 'temperature',
+         between(horizon, 1, 14), 
+         depth %in% c(8), 
+         model_id == 'persistence', 
+         reference_datetime %in% c('2022-11-14 00:00:00', '2022-11-07 00:00:00', '2022-11-21 00:00:00')) |> 
+  group_by(reference_datetime) |> 
+  summarise(mean_logs = round(mean(logs), 1))
+
+
+
 all_scored %>%
   filter(variable == 'temperature',
          between(horizon, 1, 14), 
@@ -562,8 +604,10 @@ all_scored %>%
   theme_bw() + 
   facet_wrap(~factor(model_id)) +
   geom_point(aes(y=observation)) +
-  scale_y_continuous(limits = c(0,16)) +
-  labs(title = '8 m forecast Nov 14 2022',
+  # scale_y_continuous(limits = c(0,16)) +
+  labs(title = '8 m forecast Nov 2022',
+       subtitle = '3 1- 14 day aheadweekly forecasts generate from 7th, 14th, and 21st Novemeber 2022',
        y = 'Water temperature °C') +
   scale_colour_manual(values = cols, limits = 'persistence', name = 'Model')  +
   scale_fill_manual(values = cols, limits = 'persistence', name = 'Model') 
+            
