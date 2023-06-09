@@ -1,9 +1,9 @@
 # Script 2 in workflow to generate mme forecasts
 # This script combines different model forecasts and saves them in a format that can be scored
 
-# There will be 8 different scored forecasts
+# There will be  different scored forecasts
 # 5 individual models (3 process based, 2 empirical baseline)
-# and then 3 multi-model ensembles (LER, empirical baselines, LER+baselines) 
+# and then 2 multi-model ensembles (PM ensemble, full ensemble) 
 
 # library(GLM3r)
 # library(FLAREr)
@@ -13,16 +13,10 @@ library(lubridate)
 
 setwd(here::here())
 
+# can use a lot of memory
 rm(list = ls())
 gc()
 #### a) Create multi-model ensembles ####
-# LER forecast
-# ler_forecast <- data.table::fread('./forecasts/ler_forecast.csv.gz') %>%
-#   filter(variable == 'temperature') %>%
-#   # Recode the parameter
-#   mutate(parameter = case_when(model_id == 'GLM' ~ as.numeric(parameter),
-#                               model_id == 'GOTM' ~ as.numeric(parameter) + 1000,
-#                               model_id == 'Simstrat' ~ as.numeric(parameter) + 2000))
 
 # Individual process model forecasts
 message('read in individual models from file')
@@ -32,6 +26,8 @@ local_path <- './forecasts/reruns'
 
 forecast_parquets <- arrow::open_dataset(local_path)
 
+
+# each forecast simulation (parameter) is recoded, to ensure different simulation id's in each MME
 GOTM_forecast <- forecast_parquets |>
   filter(model_id == 'GOTM',
          variable == 'temperature') |>
@@ -68,7 +64,7 @@ climatology_forecast <- forecast_parquets |>
 message('Climatology read')
 
 # function to create the multi-model ensemble, by resampling each individual model
-# ensemble before combining
+#  before combining
 
 create.mme <- function(forecasts, n = 256, ensemble_name, path = local_path) {
   n_models <- length(forecasts)
@@ -95,11 +91,6 @@ create.mme <- function(forecasts, n = 256, ensemble_name, path = local_path) {
 
 ##### Generate the multi model ensembles ####
 gc()
-
-message('generate the multi-model ensembles')
-create.mme(forecasts = c('RW_forecast',
-                         'climatology_forecast'),
-           ensemble_name = 'empirical')
 
 create.mme(forecasts = c('RW_forecast',
                          'climatology_forecast',

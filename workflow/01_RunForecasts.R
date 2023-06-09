@@ -18,7 +18,7 @@ options(dplyr.summarise.inform = FALSE)
 setwd(here::here())
 
 #### a) LER forecasts ####
-# The LER foreacsts are produced within the FLARE-LER workflow
+# The LER foreacsts are produced within the FCRE-forecast-code ler_ms workflow
 
 # Read in the raw forecasts from s3 bucket (ler_ms3 for reruns)
 s3_ler <- arrow::s3_bucket(bucket = "forecasts/ler_ms3/parquet",
@@ -27,7 +27,7 @@ s3_ler <- arrow::s3_bucket(bucket = "forecasts/ler_ms3/parquet",
 
 ds_ler <- arrow::open_dataset(s3_ler) 
 
-# ler_parquet_files <- ds_ler$files[which(is.na(str_match(ds_ler$files, "GLM/")))]
+# local location to write the parquet files
 local_path <- './forecasts/reruns'
 
 if (!dir.exists(local_path)) {
@@ -254,7 +254,7 @@ climatology_forecast <- climatology %>%
 #### c) Write forecasts to file ####
 forecasts <- ls(pattern = '_forecast')
 
-# Runs differently in console and jobs
+# write the forecasts to a local parquet database
 for (i in 1:length(forecasts)) {
   
   get(forecasts[i])|>
@@ -263,6 +263,5 @@ for (i in 1:length(forecasts)) {
   
   message(forecasts[i],' written')
 }
-
 
 #==========================#
