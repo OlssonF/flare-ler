@@ -504,6 +504,31 @@ all_scored %>%
               id_cols = depth:horizon, 
               values_from  = n, 
               values_fill = 0)
+
+# plot of prportion of ranked forecasts
+all_scored %>%
+  filter(reference_datetime != "2021-02-22 00:00:00",
+         variable == 'temperature',
+         horizon %in% c(1:14), 
+         model_id %in% all_models, 
+         depth %in% c(1,8)) |> 
+  select(reference_datetime, horizon, depth, model_id, logs) |> 
+  arrange(reference_datetime, horizon, depth, logs) |> 
+  group_by(reference_datetime, horizon, depth) |> 
+  mutate(rank = row_number()) |> 
+  group_by(horizon, depth, rank, model_id) |> 
+  summarise(proportion = (n()/104)) |> 
+  mutate(depth = paste0('Depth:', depth)) |> 
+  ggplot(aes(x=horizon, y=proportion, fill=fct_rev(as.factor(rank)))) + 
+  geom_area(alpha=0.6 , colour="white") +
+  facet_grid2(depth~factor(model_id, levels = all_models), axes = 'all', remove_labels = 'all') +
+  scale_fill_viridis_d(begin = 1, end = 0, name = 'Rank') +
+  theme_bw() +
+  theme(panel.spacing = unit(1, 'lines')) +
+  coord_cartesian(ylim = c(0,1)) +
+  scale_y_continuous(expand = c(0,0.001), name = 'Proportion of forecasts') +
+  scale_x_continuous(expand = c(0,0.001), breaks = c(1,7,14), name = 'Horizon (days)')
+
 # Table S1 of scores for 1 and 8 m
 
 all_scored %>%
