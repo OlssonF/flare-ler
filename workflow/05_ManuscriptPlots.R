@@ -506,6 +506,8 @@ all_scored %>%
               values_fill = 0)
 
 # plot of prportion of ranked forecasts
+all_combinations <- expand.grid()
+
 all_scored %>%
   filter(reference_datetime != "2021-02-22 00:00:00",
          variable == 'temperature',
@@ -518,16 +520,18 @@ all_scored %>%
   mutate(rank = row_number()) |> 
   group_by(horizon, depth, rank, model_id) |> 
   summarise(proportion = (n()/104)) |> 
-  mutate(depth = paste0('Depth:', depth)) |> 
-  ggplot(aes(x=horizon, y=proportion, fill=fct_rev(as.factor(rank)))) + 
-  geom_area(alpha=0.6 , colour="white") +
+  ungroup() |> 
+  complete(rank, nesting(model_id, depth, horizon), fill = list(proportion = 0))  |> 
+  ggplot(aes(x=horizon, y=proportion, fill=fct_rev(as.factor(rank)))) +
+  geom_area(colour="black", stat = 'identity', position = 'stack') +
   facet_grid2(depth~factor(model_id, levels = all_models), axes = 'all', remove_labels = 'all') +
-  scale_fill_viridis_d(begin = 1, end = 0, name = 'Rank') +
+  # facet_grid(depth~model_id) +
+  scale_fill_brewer(palette = 'RdBu', name = 'Rank') +
   theme_bw() +
   theme(panel.spacing = unit(1, 'lines')) +
   coord_cartesian(ylim = c(0,1)) +
-  scale_y_continuous(expand = c(0,0.001), name = 'Proportion of forecasts') +
-  scale_x_continuous(expand = c(0,0.001), breaks = c(1,7,14), name = 'Horizon (days)')
+  scale_y_continuous(expand = c(0,0), name = 'Proportion of forecasts') +
+  scale_x_continuous(expand = c(0,0), breaks = c(1,7,14), name = 'Horizon (days)')
 
 # Table S1 of scores for 1 and 8 m
 
@@ -727,3 +731,46 @@ ggplot(p2, aes(x=datetime, y=prediction, group = parameter, colour = best)) +
   geom_line(alpha = 0.5)  +
   scale_colour_discrete(guide = 'none')
 
+
+
+# ==== covariance/correlation among models ====
+
+
+all_list <- all_scored |>
+  mutate(bias = mean - observation) %>% 
+  select(reference_datetime, model_id, horizon, depth, bias) |> 
+  filter(horizon %in% c(1,7,14),
+         depth %in% c(1,8),
+         model_id %in% individual_models) |> 
+  pivot_wider(names_from = model_id, values_from = bias) |> 
+  na.omit() |> 
+  ungroup() |> 
+  # split into a list of dataframes for each horizon/depth combination
+  split(horizon~depth)
+
+# calculate the cor for all groups
+cor_all <- lapply(all_list, function(x) cor(x[,4:8]))
+
+library(rstatix) # for cor_gather
+
+lapply(cor_all, cor_gather) |> 
+  bind_rows(.id = 'group') |> 
+  separate(group, into = c('horizon', 'depth')) |> 
+  arrange(var1, var2) |> 
+  group_by(horizon, depth) |> 
+  #this makes sure we only have the upper left quadrant (not sure how it works tbh)
+  distinct(smaller = pmin(var1, var2),
+           larger = pmax(var1, var2),
+           .keep_all = TRUE) %>%
+  select(-smaller, -larger) |>
+  mutate(horizon = as.numeric(horizon)) |>
+  
+  ggplot(aes(x=var1, y=var2, fill = cor)) +
+  geom_tile() +
+  geom_text(aes(label = round(cor, 2))) +
+  facet_grid2(depth~horizon, axes = 'all', labeller = label_both) +
+  labs(x='', y='')+
+  colorspace::scale_fill_continuous_diverging(limits = c(-1,1), palette = 'Blue-Red 2') +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0))
