@@ -506,8 +506,6 @@ all_scored %>%
               values_fill = 0)
 
 # plot of prportion of ranked forecasts
-all_combinations <- expand.grid()
-
 all_scored %>%
   filter(reference_datetime != "2021-02-22 00:00:00",
          variable == 'temperature',
@@ -520,8 +518,39 @@ all_scored %>%
   mutate(rank = row_number()) |> 
   group_by(horizon, depth, rank, model_id) |> 
   summarise(proportion = (n()/104)) |> 
-  ungroup() |> 
+  ungroup() |>
+  # make sure every rank is present in each model/depth/horizon group
   complete(rank, nesting(model_id, depth, horizon), fill = list(proportion = 0))  |> 
+  filter(rank %in% c(1,7)) |> 
+  mutate(name = ifelse(rank == 1, 'best model', ifelse(rank == 7, 'worst model', NA))) |> 
+  
+  ggplot(aes(x=horizon, y=proportion, fill=factor(model_id, levels = all_models))) +
+  geom_area( stat = 'identity', position = 'stack') +
+  facet_grid2(depth~name, axes = 'all', remove_labels = 'all') +
+  scale_fill_manual(values = cols, limits = all_models, name = 'Model')  +
+  theme_bw() +
+  theme(panel.spacing = unit(1, 'lines')) +
+  coord_cartesian(ylim = c(0,1)) +
+  scale_y_continuous(expand = c(0,0), name = 'Proportion of forecasts') +
+  scale_x_continuous(expand = c(0,0), breaks = c(1,7,14), name = 'Horizon (days)')
+
+# plot of prportion of ranked forecasts
+all_scored %>%
+  filter(reference_datetime != "2021-02-22 00:00:00",
+         variable == 'temperature',
+         horizon %in% c(1:14), 
+         model_id %in% all_models, 
+         depth %in% c(1,8)) |> 
+  select(reference_datetime, horizon, depth, model_id, logs) |> 
+  arrange(reference_datetime, horizon, depth, logs) |> 
+  group_by(reference_datetime, horizon, depth) |> 
+  mutate(rank = row_number()) |> 
+  group_by(horizon, depth, rank, model_id) |> 
+  summarise(proportion = (n()/104)) |> 
+  ungroup() |>
+  # make sure every rank is present in each model/depth/horizon group
+  complete(rank, nesting(model_id, depth, horizon), fill = list(proportion = 0))  |> 
+  
   ggplot(aes(x=horizon, y=proportion, fill=fct_rev(as.factor(rank)))) +
   geom_area(colour="black", stat = 'identity', position = 'stack') +
   facet_grid2(depth~factor(model_id, levels = all_models), axes = 'all', remove_labels = 'all') +
@@ -737,7 +766,8 @@ ggplot(p2, aes(x=datetime, y=prediction, group = parameter, colour = best)) +
 
 
 all_list <- all_scored |>
-  mutate(bias = mean - observation) %>% 
+  mutate(bias = mean - observation,
+         change_bias = bias - lag(bias)) %>%
   select(reference_datetime, model_id, horizon, depth, bias) |> 
   filter(horizon %in% c(1,7,14),
          depth %in% c(1,8),
@@ -750,6 +780,7 @@ all_list <- all_scored |>
 
 # calculate the cor for all groups
 cor_all <- lapply(all_list, function(x) cor(x[,4:8]))
+cov_all <- lapply(all_list, function(x) cov(x[,4:8]))
 
 library(rstatix) # for cor_gather
 
