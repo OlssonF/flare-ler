@@ -805,3 +805,38 @@ lapply(cor_all, cor_gather) |>
   theme_bw() +
   theme(panel.grid = element_blank(),
         axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0))
+
+
+
+# SI plot of the evolution of the parameters over the spin up period before the first forecast
+
+# which parameter are for which model are in the forecast files
+param_config <- read_csv('../configuration/ler_ms/parameter_calibration_config.csv') |> 
+  rename(model_id = model)
+
+# got to the right bucket
+param_values <- arrow::s3_bucket(bucket = "forecasts/ler_ms3/parquet",
+                                 endpoint_override =  "s3.flare-forecast.org",
+                                 anonymous = TRUE) |> 
+  open_dataset() |> 
+  filter(variable %in% param_config$par_names_save) |> 
+  collect()
+
+# manual layout of facets
+layout_design <- "
+  ABC
+  DE#
+  FG#
+"
+#only want the parameter values for the spin up (before forecast 0)
+param_values |> 
+  filter(reference_datetime == '2021-02-22 00:00:00') |> 
+  ggplot(aes(x=datetime, y = prediction, group = parameter)) +
+  geom_line() +
+  scale_x_datetime(date_labels = '%d %b %Y', date_breaks = '1 month', expand = c(0.01, 0)) +
+  ggh4x::facet_manual(vars(model_id,variable), 
+                      scales = 'free_y', design = layout_design, 
+                      labeller = label_both) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  labs(x = 'Date', y = 'Parameter value')
