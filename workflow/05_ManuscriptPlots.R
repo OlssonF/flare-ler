@@ -9,15 +9,15 @@ source('R/time_functions.R')
 
 # Working document for the final plots for the paper   #
 # ====== ancillary bits and pieces ======#
-all_models <-  c('Full Ensemble', 'PM Ensemble', '  ',
-                 'persistence', 'climatology', '  ', 
+all_models <-  c('Full MME', 'PM MME', '  ',
+                 'persistence', 'climatology', '   ', 
                  'PM1', 'PM2', 'PM3')
 
-baselines_ensembles <- c('Full Ensemble', 'persistence', 'climatology', 'PM Ensemble')
-process_models <- c('PM Ensemble', 'PM1', 'PM2', 'PM3')
+baselines_ensembles <- c('Full MME', 'persistence', 'climatology', 'PM MME')
+process_models <- c('PM MME', 'PM1', 'PM2', 'PM3')
 baseline_models <- c('climatology', 'persistence')
 individual_models <-  c('persistence', 'climatology', 'PM1', 'PM2', 'PM3')
-ensemble_models <- c('Full Ensemble', 'PM Ensemble')
+MME_models <- c('Full MME', 'PM MME')
 
 
 time_periods <- c(stratified_period = "Stratified", 
@@ -27,32 +27,32 @@ time_periods <- c(stratified_period = "Stratified",
 cols <- c('persistence' = "#455BCDFF",
           'climatology' =  "#30B1F4FF",
           '  ' = 'white',
-          '  ' = 'white',
+          '   ' = 'white',
           'PM1' = "#A2FC3CFF", #'#FCA50AFF',
           'PM2' =  "#F0CC3AFF", #'#E65D30FF',
           'PM3' = "#F9731DFF", #'#AE305CFF',
-          'PM Ensemble' =  "#C42503FF", #'#6B186EFF',
-          'Full Ensemble' = 'black')#'darkgrey'
+          'PM MME' =  "#C42503FF", #'#6B186EFF',
+          'Full MME' = 'black')#'darkgrey'
 
 linetypes <- c('climatology' = 'dotdash', 
                'persistence' = 'dotdash',
                '  ' = 'solid',
-               '  ' = 'solid',
+               '   ' = 'solid',
                'PM1' = 'dashed',
                'PM2' = 'dashed', 
                'PM3' = 'dashed', 
-               'PM Ensemble' =  "solid", 
-               'Full Ensemble' = 'solid')
+               'PM MME' =  "solid", 
+               'Full MME' = 'solid')
 
 shapes <- c('climatology' = 15, 
             'persistence' = 15,
             'PM1' = 16,
             'PM2' = 16, 
-            ' ' = 16,
-            ' ' = 16,
+            '  ' = 16,
+            '   ' = 16,
             'PM3' = 16, 
-            'PM Ensemble' =  17, 
-            'Full Ensemble' = 17)
+            'PM MME' =  17, 
+            'Full MME' = 17)
 
 strat_dates <- calc_strat_dates(targets = 'https://s3.flare-forecast.org/targets/ler_ms3/fcre/fcre-targets-insitu.csv',
                                 density_diff = 0.1)  %>% na.omit() 
@@ -81,7 +81,8 @@ if (local == TRUE) {
 # extract a list of model_id from the parquet
 distinct_models <- scores_parquets |> 
   distinct(model_id) |> 
-  pull()
+  pull() |> 
+  filter(model_id != 'empirical')
 
 # only weekly forecasts
 first_date <- scores_parquets %>%
@@ -118,23 +119,23 @@ all_scored <- bind_rows(mget(all_df))
 
 # recode the model_id's to the paper names
 all_scored <-  all_scored |> 
-  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full Ensemble",
+  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full MME",
                                               "GLM"="PM1",
                                               "GOTM"='PM2',
                                               "Simstrat"='PM3',
                                               "RW" = "persistence",
-                                              "ler" = "PM Ensemble")))
+                                              "ler" = "PM MME")))
 out_dir <- 'plots/reruns'
 
 
 
 shadow_summary <- read_csv('shadow_summary.csv') |> 
-  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full Ensemble",
+  mutate(model_id = plyr::revalue(model_id, c("empirical_ler"="Full MME",
                                               "GLM"="PM1",
                                               "GOTM"='PM2',
                                               "Simstrat"='PM3',
                                               "RW" = "persistence",
-                                              "ler" = "PM Ensemble"))) |> 
+                                              "ler" = "PM MME"))) |> 
   filter(model_id != 'empirical')
 
 #=======================================#
@@ -172,55 +173,57 @@ layout_design <- "
 forecast_date_plots <- c('2023-02-20 00:00:00',  '2022-08-01 00:00:00')
 example_levels <- c('PM1', 'PM2', 'PM3',
                     'persistence', 'climatology', 
-                    'PM Ensemble','Full Ensemble')
+                    'PM MME','Full MME')
 
 forecast_example1 <- all_scored |>
-  filter(reference_datetime == forecast_date_plots[1], (depth == 1),
-         model_id != 'empirical') |> 
-  ggplot(aes(x=horizon, y = median)) + geom_line(aes( colour = model_id),linewidth = 1) +
+  filter(reference_datetime == forecast_date_plots[1], (depth == 1)) |> 
+  ggplot(aes(x=horizon, y = median)) + 
+  geom_point(aes(y=observation)) +
+  geom_line(aes(colour = model_id),linewidth = 1) +
   geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, fill = model_id), alpha = 0.1) +
   theme_bw() + 
   facet_manual(~factor(model_id, levels = example_levels),
                design = layout_design) +
-  geom_point(aes(y=observation)) +
   scale_y_continuous(limits = c(0,16)) +
   scale_x_continuous(breaks = c(0,2,4,6,8,10,12,14)) +
-  labs(title = paste0('Forecast start: ', forecast_date_plots[1], ' & Depth: 1 m'),
-       y = 'Water temperature °C') +
+  labs(title = paste0('Forecast: ', forecast_date_plots[1], ' at 1 m'),
+       y = 'Water temperature (°C)',
+       x = 'Horizon (days)') +
   scale_colour_manual(values = cols, limits = all_models, name = 'Model')  +
   scale_fill_manual(values = cols, limits = all_models, name = 'Model') +
-  theme(legend.position = c(0.8,0.25))
+  theme(panel.grid.minor = element_blank())
 
 
 forecast_example2 <- all_scored |>
-  filter(reference_datetime == forecast_date_plots[2], (depth == 8),
-         model_id != 'empirical') |> 
-  ggplot(aes(x=horizon, y = median)) + geom_line(aes( colour = model_id),linewidth = 1) +
+  filter(reference_datetime == forecast_date_plots[2], 
+         depth == 8) |> 
+  ggplot(aes(x=horizon, y = median)) +
+  geom_point(aes(y=observation)) +
+  geom_line(aes( colour = model_id),linewidth = 1) +
   geom_ribbon(aes(ymax = quantile97.5, ymin = quantile02.5, fill = model_id), alpha = 0.1) +
   theme_bw() + 
   facet_manual(~factor(model_id, levels = example_levels),
                design = layout_design) +
-  geom_point(aes(y=observation)) +
-  scale_y_continuous(limits = c(5,15), breaks = seq(6,14,2)) +
+  scale_y_continuous(breaks = seq(6,14,2)) +
   scale_x_continuous(breaks = c(0,2,4,6,8,10,12,14)) +
-  labs(title = paste0('Forecast start: ', forecast_date_plots[2], ' & Depth: 8 m'),
-       y = 'Water temperature °C') +
+  labs(title = paste0('Forecast: ', forecast_date_plots[2], ' at 8 m'),
+       y = 'Water temperature (°C)',
+       x = 'Horizon (days)') +
   scale_colour_manual(values = cols, limits = all_models, name = 'Model')  +
-  scale_fill_manual(values = cols, limits = all_models, name = 'Model') +
-  theme(legend.position = c(0.8,0.25))
+  scale_fill_manual(values = cols, limits = all_models, name = 'Model')+
+  theme(panel.grid.minor = element_blank())
 
 
 plot_3 <- ggpubr::ggarrange(forecast_example1, forecast_example2, 
-                            nrow = 2, 
+                            nrow = 1, 
                             common.legend = T, legend = 'none', labels = c('a)', 'b)')) +
   theme(panel.grid.minor = element_blank())
 
-ggsave(plot_3, filename = file.path(out_dir, 'plot_3.png'), height = 20, width = 14, units = 'cm')
+ggsave(plot_3, filename = file.path(out_dir, 'plot_3.png'), height = 10, width = 20, units = 'cm')
 
 #=====================================#
 
 ##  PLOT 4 - aggreaged metrics ====
-# bias
 absbias_plot <- 
   all_scored %>%
   filter(variable == 'temperature',
@@ -235,10 +238,11 @@ absbias_plot <-
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y = 'Absolute Bias (°C)',
-       x = 'Horizon (days)') +
+  labs(y = 'Absolute bias (°C)',
+       x = 'Horizon (days)', subtitle = 'a)') +
   theme_bw() +
-  guides(colour =guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
+  guides(colour =guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size=  12, hjust = -0.12, vjust = -5, face = 'bold'))
 
 
 # variance
@@ -254,10 +258,10 @@ sd_plot <- all_scored %>%
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y= expression(paste("Standard deviation (°C)")), 
-       x = 'Horizon (days)') +
-  theme_bw()+
-  guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) 
+  labs(y= expression(paste('Standard deviation (°C)')), 
+       x = 'Horizon (days)', subtitle = 'b)') +
+  theme_bw() +
+  theme(plot.subtitle = element_text(size=  12, hjust = -0.12, vjust = -5, face = 'bold'))
 
 # log score
 logs_plot <- all_scored %>%
@@ -272,15 +276,18 @@ logs_plot <- all_scored %>%
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
-  labs(y = 'Ignorance score', x = 'Horizon (days)') +
+  labs(y = 'Ignorance score', x = 'Horizon (days)', subtitle = 'c)') +
   theme_bw()+
-  guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5))
+  guides(colour = guide_legend(nrow = 3, title.position = 'top', title.hjust = 0.5)) +
+  theme(plot.subtitle = element_text(size=  12, hjust = -0.12, vjust = -5, face = 'bold'))
+
 
 
 plot_4 <- ggpubr::ggarrange(absbias_plot, sd_plot, logs_plot, 
-                            ncol  = 3, common.legend = T, align = "hv", labels = c('a)', 'b)', 'c)')) 
+                            ncol  = 3, common.legend = T, 
+                            align = "hv") 
 
-ggsave(plot_4, filename = file.path(out_dir, 'plot_4.png'), height = 10, width = 21, units = 'cm')
+ggsave(plot_4, filename = file.path(out_dir, 'plot_4.png'), height = 8, width = 17, units = 'cm')
 
 
 #==========================================#
@@ -300,6 +307,7 @@ all_list <- all_scored |>
   # split into a list of dataframes for each horizon/depth combination
   split(horizon~depth)
 
+# function to generate a cross-correlation matrix
 ccf_matrix <- function(x, lag_max = 0) {
   
   vars <- colnames(x)
@@ -314,7 +322,7 @@ ccf_matrix <- function(x, lag_max = 0) {
     
     r[i] <- ccf(x[,rownames(r)[mod_comb$Var1[i]]], 
                 x[,rownames(r)[mod_comb$Var2[i]]], 
-                lag.max = 0, plot = F)$acf[1]
+                lag.max = 0, plot = F, )$acf[1]
     
     
     
@@ -325,6 +333,7 @@ ccf_matrix <- function(x, lag_max = 0) {
 
 # calculate the ccf for among model_id for all horizons
 ccf_all <- lapply(all_list, function(x) ccf_matrix(x[,4:8]))
+
 library(rstatix) # for cor_gather
 
 facet_tags <- expand.grid(horizon = c(1,7,14),
@@ -348,16 +357,17 @@ h1_ccf <-
   filter(horizon == 1) |> 
   ggplot(aes(x=var1, y=var2)) +
   geom_tile(aes(fill = cor)) +
-  geom_text(aes(label = round(cor, 2))) +
+  geom_text(aes(label = round(cor, 2)), size = 3) +
   facet_wrap(~horizon, labeller = label_both) +
   labs(x='', y='')+
   colorspace::scale_fill_continuous_diverging(limits = c(-1,1), palette = 'Blue-Red 2',
                                               name = 'Cross correlation\ncoefficient') +
-  theme_bw() +
+  theme_bw(base_size = 12) +
   theme(panel.grid = element_blank(),
-        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0), 
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
         legend.title = element_text(vjust = 1),
-        legend.position = 'top') 
+        legend.position = 'top', 
+        axis.ticks = element_blank()) 
 
 h7_ccf <- lapply(ccf_all, cor_gather) |> 
   bind_rows(.id = 'group') |> 
@@ -373,13 +383,14 @@ h7_ccf <- lapply(ccf_all, cor_gather) |>
   filter(horizon == 7) |> 
   ggplot(aes(x=var1, y=var2)) +
   geom_tile(aes(fill = cor)) +
-  geom_text(aes(label = round(cor, 2))) +
+  geom_text(aes(label = round(cor, 2)), size = 3) +
   facet_wrap(~horizon, labeller = label_both) +
   labs(x='', y='')+
   colorspace::scale_fill_continuous_diverging(limits = c(-1,1), palette = 'Blue-Red 2') +
-  theme_bw() +
+  theme_bw(base_size = 12) +
   theme(panel.grid = element_blank(),
-        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0)) 
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
+        axis.ticks = element_blank()) 
 
 
 h14_ccf <- lapply(ccf_all, cor_gather) |> 
@@ -396,13 +407,14 @@ h14_ccf <- lapply(ccf_all, cor_gather) |>
   filter(horizon == 14) |> 
   ggplot(aes(x=var1, y=var2)) +
   geom_tile(aes(fill = cor)) +
-  geom_text(aes(label = round(cor, 2))) +
+  geom_text(aes(label = round(cor, 2)), size = 3) +
   facet_wrap(~horizon, labeller = label_both) +
   labs(x='', y='')+
   colorspace::scale_fill_continuous_diverging(limits = c(-1,1), palette = 'Blue-Red 2') +
-  theme_bw() +
+  theme_bw(base_size = 12) +
   theme(panel.grid = element_blank(),
-        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0)) 
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
+        axis.ticks = element_blank()) 
 
 
 
@@ -410,7 +422,7 @@ plot_5 <- ggpubr::ggarrange(h1_ccf, h7_ccf, h14_ccf, nrow = 1,
                             labels = c('a)', 'b)', 'c)'), 
                             common.legend = T)
 
-ggsave(plot_5, filename = file.path(out_dir, 'plot_5.png'), height = 12, width = 32, units = 'cm')
+ggsave(plot_5, filename = file.path(out_dir, 'plot_5.png'), height = 8, width = 21, units = 'cm')
 #============================================#
 
 ##  PLOT 6 - rank proportions ====
@@ -449,10 +461,10 @@ plot_6 <-
   scale_y_continuous(expand = c(0,0), name = 'Proportion of forecasts') +
   scale_x_continuous(expand = c(0,0), breaks = c(1,7,14), name = 'Horizon (days)') +
   geom_text(data = facet_tags,
-            mapping = aes(x = -0.1, y = 1.07, label = tag), 
+            mapping = aes(x = -0.12, y = 1.1, label = tag), 
             size = 4, fontface = 'bold') 
 
-ggsave(plot_6, filename = file.path(out_dir, 'plot_6.png'), height = 12, width = 32, units = 'cm')
+ggsave(plot_6, filename = file.path(out_dir, 'plot_6.png'), height = 8, width = 25, units = 'cm')
 
 #==============================================#
 
@@ -477,7 +489,7 @@ bias_plot <-
   na.omit() %>%
   ggplot(.) +
   geom_line(aes(x=horizon, y= bias, colour = model_id, linetype = model_id), linewidth = 0.9) +
-  facet_wrap(~depth, ncol = 1, labeller = label_both)+
+  facet_wrap(~depth, ncol = 1, labeller = label_both) +
   scale_colour_manual(values = cols, limits = all_models, name = 'Model') +
   scale_linetype_manual(values = linetypes, limits = all_models, name = 'Model') +
   scale_x_continuous(breaks = c(1,7,14)) +
