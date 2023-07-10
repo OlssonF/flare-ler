@@ -29,9 +29,13 @@ open_parquets <- arrow::open_dataset(forecast_s3)
 
 
 # vector of unique model_ids
-models <- open_parquets |>
-  distinct(model_id) |> 
-  pull()
+models <- c("GLM",
+            "GOTM",
+            "Simstrat",
+            "RW", 
+            "empirical_ler",
+            "ler",
+            "climatology")
 
 # vector of unique reference_datetimes
 unique_reftime <- open_parquets |>
@@ -44,10 +48,9 @@ unique_reftime <- open_parquets |>
 model_refdates <- expand.grid(model_id = models, reference_datetime = unique_reftime)
 
 # only need to score the baselines and ensembles
-# (the individual PM models were scored in the FLARE combinedworkflow)
+# (the individual PM models were scored in the FLARE combined workflow)
 to_score <- model_refdates |> 
   filter(model_id %in% c("RW", 
-                         "empirical",
                          "empirical_ler",
                          "ler",
                          "climatology"))
@@ -94,7 +97,7 @@ output_directory <- arrow::s3_bucket(bucket = "scores/ler_ms3/parquet",
 scores_parquets <- arrow::open_dataset(file.path(local_path, 'site_id=fcre'))
 
 # extract a list of model_id from the parquet
-new_models <- c('RW', 'climatology', 'ler', 'empirical_ler', 'empirical')
+new_models <- c('RW', 'climatology', 'ler', 'empirical_ler')
 
 # which ref_datetimes
 first_date <- scores_parquets %>%

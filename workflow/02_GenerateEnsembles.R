@@ -3,7 +3,7 @@
 
 # There will be  different scored forecasts
 # 5 individual models (3 process based, 2 empirical baseline)
-# and then 2 multi-model ensembles (PM ensemble, full ensemble) 
+# and then 2 multi-model ensembles (PM ensemble (ler), full ensemble (empirical-ler)) 
 
 # library(GLM3r)
 # library(FLAREr)

@@ -78,11 +78,14 @@ if (local == TRUE) {
 }
 
 
-# extract a list of model_id from the parquet
-distinct_models <- scores_parquets |> 
-  distinct(model_id) |> 
-  pull() |> 
-  filter(model_id != 'empirical')
+# vector of model_ids 
+distinct_models <- c("GLM",
+                     "GOTM",
+                     "Simstrat",
+                     "RW", 
+                     "empirical_ler",
+                     "ler",
+                     "climatology")
 
 # only weekly forecasts
 first_date <- scores_parquets %>%
@@ -135,8 +138,7 @@ shadow_summary <- read_csv('shadow_summary.csv') |>
                                               "GOTM"='PM2',
                                               "Simstrat"='PM3',
                                               "RW" = "persistence",
-                                              "ler" = "PM MME"))) |> 
-  filter(model_id != 'empirical')
+                                              "ler" = "PM MME")))
 
 #=======================================#
 # Main text ---------------------------------------------------------------
@@ -223,7 +225,7 @@ ggsave(plot_3, filename = file.path(out_dir, 'plot_3.png'), height = 10, width =
 
 #=====================================#
 
-##  PLOT 4 - aggreaged metrics ====
+##  PLOT 4 - aggregated metrics ====
 absbias_plot <- 
   all_scored %>%
   filter(variable == 'temperature',
@@ -426,7 +428,7 @@ ggsave(plot_5, filename = file.path(out_dir, 'plot_5.png'), height = 8, width = 
 #============================================#
 
 ##  PLOT 6 - rank proportions ====
-# plot of prportion of ranked forecasts
+# plot of proportion of ranked forecasts
 facet_tags <- expand.grid(depth = c(1,8),
                           model_id= all_models[!str_detect(all_models, '  ')]) |> 
   mutate(tag = paste0(letters[1:14],')'))
@@ -468,7 +470,7 @@ ggsave(plot_6, filename = file.path(out_dir, 'plot_6.png'), height = 8, width = 
 
 #==============================================#
 
-##  PLOT 7 - depth disagggregated scores ======
+##  PLOT 7 - depth disaggregated scores ======
 facet_tags <- data.frame(depth = c(1,8),
                          metric = c('bias', 'bias',
                                     'sd', 'sd',
@@ -595,7 +597,7 @@ plot_8 <-
 ggsave(plot_8, filename = file.path(out_dir, 'plot_8.png'), height = 7, width = 15, units = 'cm')
 
 #=====================================#
-## TABLE_1 - aggregated scors ====
+## TABLE_1 - aggregated scores ====
 # aggregated scores
 all_scored %>%
   filter(variable == 'temperature',
@@ -753,7 +755,7 @@ ggsave(plot_s3, filename = file.path(out_dir, 'plot_s3.png'), height = 12, width
 
 #===========================#
 
-##  PLOT_S4 - Best/worst rank proprtion =====
+##  PLOT_S4 - Best/worst rank proportion =====
 
 facet_tags <- data.frame(depth = c(1,8),
                          name = c('best model', 'worst model',
@@ -786,7 +788,7 @@ plot_s4 <- all_scored %>%
             stat = 'identity', position = 'stack') +
   facet_grid2(depth~name, axes = 'all', remove_labels = 'all') +
   scale_fill_manual(values = cols, limits = all_models, name = 'Model')  +
-  theme_bw() +
+  theme_bw(base_size = 14) +
   theme(panel.spacing = unit(1.2, 'lines')) +
   coord_cartesian(ylim = c(0,1), xlim = c(1,14), clip = 'off') +
   scale_y_continuous(expand = c(0,0), name = 'Proportion of forecasts') +
